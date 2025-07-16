@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Plus, Clock, Bell } from 'lucide-react';
-import NewTipModal from '@/components/NewTipModal';
+//import NewTipModal from '@/components/NewTipModal';
 import Link from 'next/link';
 
 export default function Home() {
@@ -13,6 +13,7 @@ export default function Home() {
     checkNotifications();
   }, []);
 
+  
   const checkNotifications = async () => {
     try {
       const response = await fetch('/api/notifications');
