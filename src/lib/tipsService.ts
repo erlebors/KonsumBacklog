@@ -35,7 +35,7 @@ class TipsService {
     try {
       const data = await fs.readFile(this.dataPath, 'utf-8');
       this.tips = JSON.parse(data);
-    } catch (error) {
+    } catch {
       // File doesn't exist yet, start with empty array
       this.tips = [];
     }

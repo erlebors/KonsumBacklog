@@ -3,11 +3,11 @@ import { AzureOpenAI } from 'openai';
 import { tipsService, Tip } from '@/lib/tipsService';
 
 // Function to extract JSON from AI response
-const extractJSONFromResponse = (response: string): any => {
+const extractJSONFromResponse = (response: string): Record<string, unknown> => {
   try {
     // First, try to parse as direct JSON
     return JSON.parse(response);
-  } catch (error) {
+  } catch {
     // If that fails, try to extract JSON from markdown code blocks
     const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
     if (jsonMatch) {
@@ -235,7 +235,16 @@ const processTipWithAI = async (tip: Tip) => {
 
     if (response?.choices?.[0]?.message?.content) {
       try {
-        const aiAnalysis = extractJSONFromResponse(response.choices[0].message.content);
+        const aiAnalysis = extractJSONFromResponse(response.choices[0].message.content) as {
+          folder?: string;
+          priority?: string;
+          summary?: string;
+          tags?: string[];
+          actionRequired?: boolean;
+          estimatedTime?: string;
+          needsMoreInfo?: boolean;
+          urgencyLevel?: string;
+        };
         console.log('AI Analysis:', aiAnalysis);
         
         // Parse relative dates from content using our local function
