@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { Redis } from '@upstash/redis';
 
 export interface Tip {
   id: string;
@@ -25,30 +26,62 @@ export interface Tip {
 class TipsService {
   private tips: Tip[] = [];
   private dataPath: string;
+  private isProduction: boolean;
+  private redis: Redis | null = null;
 
   constructor() {
     this.dataPath = path.join(process.cwd(), 'data', 'tips.json');
+    this.isProduction = process.env.NODE_ENV === 'production';
+    
+    // Initialize Redis in production if UPSTASH_REDIS_REST_URL is available
+    if (this.isProduction && process.env.UPSTASH_REDIS_REST_URL) {
+      this.redis = new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+      });
+    }
+    
     this.loadTips();
   }
 
   private async loadTips() {
     try {
-      const data = await fs.readFile(this.dataPath, 'utf-8');
-      this.tips = JSON.parse(data);
+      if (this.redis) {
+        // Use Upstash Redis in production
+        const tipsData = await this.redis.get('tips');
+        this.tips = tipsData ? (tipsData as Tip[]) : [];
+      } else if (this.isProduction) {
+        // Fallback to in-memory storage in production if Redis not configured
+        console.warn('Upstash Redis not configured, using in-memory storage (data will not persist)');
+        this.tips = [];
+      } else {
+        // Use file system in development
+        const data = await fs.readFile(this.dataPath, 'utf-8');
+        this.tips = JSON.parse(data);
+      }
     } catch {
-      // File doesn't exist yet, start with empty array
+      // File doesn't exist yet or Redis not configured, start with empty array
       this.tips = [];
     }
   }
 
   private async saveTips() {
     try {
-      const dataDir = path.join(process.cwd(), 'data');
-      await fs.mkdir(dataDir, { recursive: true });
-      await fs.writeFile(
-        this.dataPath,
-        JSON.stringify(this.tips, null, 2)
-      );
+      if (this.redis) {
+        // Use Upstash Redis in production
+        await this.redis.set('tips', this.tips);
+      } else if (this.isProduction) {
+        // In-memory storage in production - no persistence
+        console.warn('Using in-memory storage - data will not persist between requests');
+      } else {
+        // Use file system in development
+        const dataDir = path.join(process.cwd(), 'data');
+        await fs.mkdir(dataDir, { recursive: true });
+        await fs.writeFile(
+          this.dataPath,
+          JSON.stringify(this.tips, null, 2)
+        );
+      }
     } catch (error) {
       console.error('Error saving tips:', error);
       throw error;
@@ -56,19 +89,19 @@ class TipsService {
   }
 
   async getAllTips(): Promise<Tip[]> {
-    await this.loadTips(); // Reload from file to get latest data
+    await this.loadTips(); // Reload from storage to get latest data
     return this.tips;
   }
 
   async addTip(tip: Tip): Promise<Tip> {
-    await this.loadTips(); // Reload from file
+    await this.loadTips(); // Reload from storage
     this.tips.push(tip);
     await this.saveTips();
     return tip;
   }
 
   async updateTip(id: string, updates: Partial<Tip>): Promise<Tip | null> {
-    await this.loadTips(); // Reload from file
+    await this.loadTips(); // Reload from storage
     const tipIndex = this.tips.findIndex(tip => tip.id === id);
     if (tipIndex === -1) {
       return null;
@@ -80,7 +113,7 @@ class TipsService {
   }
 
   async deleteTip(id: string): Promise<boolean> {
-    await this.loadTips(); // Reload from file
+    await this.loadTips(); // Reload from storage
     const tipIndex = this.tips.findIndex(tip => tip.id === id);
     if (tipIndex === -1) {
       return false;
@@ -92,7 +125,7 @@ class TipsService {
   }
 
   async getTip(id: string): Promise<Tip | null> {
-    await this.loadTips(); // Reload from file
+    await this.loadTips(); // Reload from storage
     return this.tips.find(tip => tip.id === id) || null;
   }
 }
