@@ -34,10 +34,22 @@ class TipsService {
     this.isProduction = process.env.NODE_ENV === 'production';
     
     // Initialize Redis in production if environment variables are available
-    if (this.isProduction && process.env.UPSTASH_REDIS_REST_URL) {
+    if (this.isProduction && (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL)) {
       try {
-        this.redis = Redis.fromEnv();
-        console.log('Upstash Redis initialized successfully');
+        // Use the environment variables you have
+        const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+        const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+        
+        if (redisUrl && redisToken) {
+          this.redis = new Redis({
+            url: redisUrl,
+            token: redisToken,
+          });
+          console.log('Upstash Redis initialized successfully with custom config');
+        } else {
+          console.warn('Redis URL or token missing, falling back to in-memory storage');
+          this.redis = null;
+        }
       } catch (error) {
         console.warn('Failed to initialize Upstash Redis:', error);
         this.redis = null;
@@ -51,18 +63,23 @@ class TipsService {
     try {
       if (this.redis) {
         // Use Upstash Redis in production
+        console.log('Loading tips from Redis...');
         const tipsData = await this.redis.get('tips');
         this.tips = tipsData ? (tipsData as Tip[]) : [];
+        console.log(`Loaded ${this.tips.length} tips from Redis`);
       } else if (this.isProduction) {
         // Fallback to in-memory storage in production if Redis not configured
         console.warn('Upstash Redis not configured, using in-memory storage (data will not persist)');
         this.tips = [];
       } else {
         // Use file system in development
+        console.log('Loading tips from file system...');
         const data = await fs.readFile(this.dataPath, 'utf-8');
         this.tips = JSON.parse(data);
+        console.log(`Loaded ${this.tips.length} tips from file system`);
       }
-    } catch {
+    } catch (error) {
+      console.error('Error loading tips:', error);
       // File doesn't exist yet or Redis not configured, start with empty array
       this.tips = [];
     }
@@ -72,18 +89,22 @@ class TipsService {
     try {
       if (this.redis) {
         // Use Upstash Redis in production
+        console.log(`Saving ${this.tips.length} tips to Redis...`);
         await this.redis.set('tips', this.tips);
+        console.log('Tips saved to Redis successfully');
       } else if (this.isProduction) {
         // In-memory storage in production - no persistence
         console.warn('Using in-memory storage - data will not persist between requests');
       } else {
         // Use file system in development
+        console.log(`Saving ${this.tips.length} tips to file system...`);
         const dataDir = path.join(process.cwd(), 'data');
         await fs.mkdir(dataDir, { recursive: true });
         await fs.writeFile(
           this.dataPath,
           JSON.stringify(this.tips, null, 2)
         );
+        console.log('Tips saved to file system successfully');
       }
     } catch (error) {
       console.error('Error saving tips:', error);
