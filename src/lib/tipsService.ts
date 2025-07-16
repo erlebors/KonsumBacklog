@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 
 export interface Tip {
   id: string;
@@ -27,24 +27,32 @@ class TipsService {
   private tips: Tip[] = [];
   private dataPath: string;
   private isProduction: boolean;
-  private useKV: boolean = false;
+  private redis: Redis | null = null;
 
   constructor() {
     this.dataPath = path.join(process.cwd(), 'data', 'tips.json');
     this.isProduction = process.env.NODE_ENV === 'production';
-    this.useKV = this.isProduction && !!process.env.KV_URL;
+    
+    // Initialize Redis if environment variables are available
+    if (this.isProduction && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+      this.redis = new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      });
+    }
+    
     this.loadTips();
   }
 
   private async loadTips() {
     try {
-      if (this.useKV) {
-        // Use Vercel KV in production
-        const tipsData = await kv.get('tips');
+      if (this.redis) {
+        // Use Upstash Redis in production
+        const tipsData = await this.redis.get('tips');
         this.tips = tipsData ? (tipsData as Tip[]) : [];
       } else if (this.isProduction) {
-        // Fallback to in-memory storage in production if KV not configured
-        console.warn('Vercel KV not configured, using in-memory storage (data will not persist)');
+        // Fallback to in-memory storage in production if Redis not configured
+        console.warn('Upstash Redis not configured, using in-memory storage (data will not persist)');
         this.tips = [];
       } else {
         // Use file system in development
@@ -52,16 +60,16 @@ class TipsService {
         this.tips = JSON.parse(data);
       }
     } catch {
-      // File doesn't exist yet or KV not configured, start with empty array
+      // File doesn't exist yet or Redis not configured, start with empty array
       this.tips = [];
     }
   }
 
   private async saveTips() {
     try {
-      if (this.useKV) {
-        // Use Vercel KV in production
-        await kv.set('tips', this.tips);
+      if (this.redis) {
+        // Use Upstash Redis in production
+        await this.redis.set('tips', this.tips);
       } else if (this.isProduction) {
         // In-memory storage in production - no persistence
         console.warn('Using in-memory storage - data will not persist between requests');

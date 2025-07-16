@@ -11,7 +11,6 @@ import {
   CheckCircle, 
   Trash2,
   Calendar,
-  Tag,
   Timer,
   Brain,
   Info,
@@ -22,6 +21,7 @@ import {
 import { format, isAfter, addDays } from 'date-fns';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import UrlPreview from '@/components/UrlPreview';
 
 interface Tip {
   id: string;
@@ -468,15 +468,9 @@ export default function ReviewPage() {
                             
                             {/* URL */}
                             {tip.url && (
-                              <a
-                                href={tip.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-3"
-                              >
-                                <Calendar className="w-4 h-4 mr-1" />
-                                {tip.url}
-                              </a>
+                              <div className="mb-3">
+                                <UrlPreview url={tip.url} />
+                              </div>
                             )}
 
                             {/* User Context */}
@@ -487,21 +481,6 @@ export default function ReviewPage() {
                                   <span className="text-sm font-medium text-green-900">Your Context</span>
                                 </div>
                                 <p className="text-sm text-green-800">{tip.userContext}</p>
-                              </div>
-                            )}
-
-                            {/* AI Tags */}
-                            {tip.tags && tip.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-3">
-                                {tip.tags.map((tag, index) => (
-                                  <span
-                                    key={index}
-                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800"
-                                  >
-                                    <Tag className="w-3 h-3 mr-1" />
-                                    {tag}
-                                  </span>
-                                ))}
                               </div>
                             )}
 
