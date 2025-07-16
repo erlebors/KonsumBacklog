@@ -12,6 +12,7 @@ export interface Tip {
   folder?: string;
   priority?: string;
   summary?: string;
+  pageSummary?: string;
   tags?: string[];
   actionRequired?: boolean;
   estimatedTime?: string;

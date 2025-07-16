@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AzureOpenAI } from 'openai';
 import { tipsService, Tip } from '@/lib/tipsService';
+import { WebCrawler } from '@/lib/webCrawler';
 
 // Function to extract JSON from AI response
 const extractJSONFromResponse = (response: string): Record<string, unknown> => {
@@ -169,8 +170,20 @@ const processTipWithAI = async (tip: Tip) => {
     const options = { endpoint, apiKey, deployment, apiVersion };
     const client = new AzureOpenAI(options);
 
+    // Crawl web page if URL is provided
+    let webContent = null;
+    if (tip.url && tip.url.trim() !== '') {
+      try {
+        console.log('Crawling web page for content...');
+        webContent = await WebCrawler.extractContent(tip.url);
+        console.log('Web crawling completed:', webContent.title);
+      } catch (crawlError) {
+        console.warn('Failed to crawl web page:', crawlError);
+      }
+    }
+
     const prompt = `
-    You are an expert information organizer. Analyze this tip and provide structured information to help organize it effectively.
+    You are an expert information organizer and content summarizer. Analyze this tip and provide structured information to help organize it effectively.
 
     TIP INFORMATION:
     Content: ${tip.content || 'N/A'}
@@ -178,11 +191,19 @@ const processTipWithAI = async (tip: Tip) => {
     Relevance Date: ${tip.relevanceDate || 'N/A'}
     Relevance Event: ${tip.relevanceEvent || 'N/A'}
 
+    ${webContent ? `
+    WEB PAGE CONTENT:
+    Title: ${webContent.title}
+    Description: ${webContent.description}
+    Content: ${webContent.content.substring(0, 3000)}
+    ` : ''}
+
     TASK: Provide a JSON response with the following structure:
     {
       "folder": "Create a specific, contextual folder name (e.g., 'Roadtrip to DC', 'Project Alpha Planning', 'Home Renovation Ideas', 'Career Development 2024')",
       "priority": "High/Medium/Low based on urgency and importance",
       "summary": "A concise 1-2 sentence summary of the key information",
+      "pageSummary": "Three bullet points summarizing the main content and why it's worth reading",
       "tags": ["3-5", "relevant", "tags", "for", "searching"],
       "actionRequired": "true/false - whether this tip requires any action",
       "estimatedTime": "Quick/Medium/Long - estimated time to process this tip",
@@ -191,15 +212,13 @@ const processTipWithAI = async (tip: Tip) => {
     }
 
     GUIDELINES:
-    - Folder: Create a specific, descriptive folder name that groups related tips together. Examples:
-      * "Roadtrip to DC" for travel tips about visiting Washington DC
-      * "Project Alpha Planning" for work-related project planning
-      * "Home Renovation Ideas" for home improvement tips
-      * "Career Development 2024" for professional development
-      * "Health & Fitness Goals" for wellness-related tips
-      * "Learning - React Development" for educational content
+    - Folder: Create a specific, descriptive folder name that groups related tips together
     - Priority: High for urgent/time-sensitive items, Medium for important but not urgent, Low for general reference
     - Summary should capture the essence of the tip
+    - Page Summary: If web content is available, provide exactly 3 bullet points:
+      * First bullet: Main topic or key insight
+      * Second bullet: Most important takeaway or actionable point
+      * Third bullet: Why this content is valuable or worth reading
     - Tags should be specific and searchable
     - Action Required: true if the tip needs follow-up or action, false if it's just reference material
     - Estimated Time: Quick (<15 min), Medium (15-60 min), Long (>60 min)
@@ -228,7 +247,7 @@ const processTipWithAI = async (tip: Tip) => {
         },
         { role: "user", content: prompt }
       ],
-      max_tokens: 800,
+      max_tokens: 1000,
       temperature: 0.3,
       model: modelName
     });
@@ -239,6 +258,7 @@ const processTipWithAI = async (tip: Tip) => {
           folder?: string;
           priority?: string;
           summary?: string;
+          pageSummary?: string;
           tags?: string[];
           actionRequired?: boolean;
           estimatedTime?: string;
@@ -258,6 +278,7 @@ const processTipWithAI = async (tip: Tip) => {
           folder: aiAnalysis.folder || 'Uncategorized',
           priority: aiAnalysis.priority || 'Medium',
           summary: aiAnalysis.summary || '',
+          pageSummary: aiAnalysis.pageSummary || '',
           tags: aiAnalysis.tags || [],
           actionRequired: aiAnalysis.actionRequired || false,
           estimatedTime: aiAnalysis.estimatedTime || 'Medium',

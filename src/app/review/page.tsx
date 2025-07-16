@@ -17,7 +17,8 @@ import {
   Info,
   ChevronDown,
   ChevronRight,
-  MoreVertical
+  MoreVertical,
+  ExternalLink
 } from 'lucide-react';
 import { format, isAfter, addDays } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -33,6 +34,7 @@ interface Tip {
   folder?: string;
   priority?: string;
   summary?: string;
+  pageSummary?: string;
   tags?: string[];
   actionRequired?: boolean;
   estimatedTime?: string;
@@ -458,6 +460,24 @@ export default function ReviewPage() {
                                   <span className="text-sm font-medium text-blue-900">AI Summary</span>
                                 </div>
                                 <p className="text-sm text-blue-800">{tip.summary}</p>
+                              </div>
+                            )}
+
+                            {/* Page Summary */}
+                            {tip.pageSummary && (
+                              <div className="mb-3 p-3 bg-indigo-50 rounded-md">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <ExternalLink className="w-4 h-4 text-indigo-600" />
+                                  <span className="text-sm font-medium text-indigo-900">Page Summary</span>
+                                </div>
+                                <div className="text-sm text-indigo-800">
+                                  {tip.pageSummary.split('\n').map((bullet, index) => (
+                                    <div key={index} className="flex items-start mb-1">
+                                      <span className="mr-2 text-indigo-600">•</span>
+                                      <span>{bullet.trim()}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             )}
 
