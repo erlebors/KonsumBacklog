@@ -1,0 +1,34 @@
+[
+  {
+    "id": "1752681754569",
+    "content": "Muesum of spies",
+    "url": "",
+    "relevanceDate": null,
+    "relevanceEvent": "roadtrip til DC",
+    "createdAt": "2025-07-16T16:02:34.569Z",
+    "isProcessed": false
+  },
+  {
+    "id": "1752682683473",
+    "content": "Cross new york over terry town cuomo bridge",
+    "url": "",
+    "relevanceDate": null,
+    "relevanceEvent": "roadtrip to DC",
+    "createdAt": "2025-07-16T16:18:03.473Z",
+    "isProcessed": true,
+    "category": "Travel",
+    "priority": "Medium",
+    "summary": "Suggestion to cross the Cuomo Bridge near Tarrytown, New York, during a road trip to Washington, DC.",
+    "tags": [
+      "roadtrip",
+      "DC",
+      "New York",
+      "Cuomo Bridge",
+      "travel"
+    ],
+    "actionRequired": true,
+    "estimatedTime": "Quick",
+    "aiProcessed": true,
+    "aiProcessedAt": "2025-07-16T16:18:05.024Z"
+  }
+]

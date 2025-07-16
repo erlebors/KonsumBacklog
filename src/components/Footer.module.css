@@ -1,0 +1,18 @@
+.footer {
+  background-color: #02066F;
+  color: #F2F3F4;
+  padding: 1rem;
+  text-align: center;
+  width: 100%;
+  font-family: 'Poppins', sans-serif;
+}
+
+.link {
+  color: #F2F3F4;
+  text-decoration: none;
+  transition: opacity 0.1s;
+}
+
+.link:hover {
+  opacity: 0.8;
+} 
