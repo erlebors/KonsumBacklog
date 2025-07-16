@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Link, Calendar, FileText, Clock, CheckCircle, Trash2, AlertCircle, Timer, Tag } from 'lucide-react';
+import { X, Link, Calendar, Clock, CheckCircle, Trash2, AlertCircle, Timer, Tag } from 'lucide-react';
 import { format, isAfter, addDays } from 'date-fns';
 import toast from 'react-hot-toast';
 

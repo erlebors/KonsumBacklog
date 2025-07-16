@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { addDays, isAfter } from 'date-fns';
 
 // In-memory storage for demo purposes
-let tips: any[] = [];
+let tips: Array<{
+  id: string;
+  content?: string;
+  relevanceDate?: string;
+  isProcessed?: boolean;
+}> = [];
 
 // Load tips from file
 const loadTips = async () => {
@@ -12,7 +16,7 @@ const loadTips = async () => {
     const dataPath = path.join(process.cwd(), 'data', 'tips.json');
     const data = await fs.readFile(dataPath, 'utf-8');
     tips = JSON.parse(data);
-  } catch (error) {
+  } catch {
     tips = [];
   }
 };
@@ -40,7 +44,7 @@ export async function GET() {
       id: tip.id,
       type: 'urgent_tip',
       title: 'Tip needs attention',
-      message: `Tip "${tip.content?.substring(0, 50)}..." is relevant on ${new Date(tip.relevanceDate).toLocaleDateString()}`,
+      message: `Tip "${tip.content?.substring(0, 50)}..." is relevant on ${new Date(tip.relevanceDate!).toLocaleDateString()}`,
       relevanceDate: tip.relevanceDate,
       tipId: tip.id
     }));

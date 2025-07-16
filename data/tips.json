@@ -71,5 +71,55 @@
     "urgencyLevel": "This Month",
     "aiProcessed": true,
     "aiProcessedAt": "2025-07-16T17:25:15.120Z"
+  },
+  {
+    "id": "1752688597413",
+    "content": "Flight video",
+    "url": "https://www.youtube.com/watch?v=EO2FoG3ClOE",
+    "relevanceDate": null,
+    "relevanceEvent": null,
+    "createdAt": "2025-07-16T17:56:37.413Z",
+    "isProcessed": false,
+    "folder": "Aviation and Flight Videos",
+    "priority": "Low",
+    "summary": "A YouTube video showcasing flight-related content, potentially for entertainment or educational purposes.",
+    "tags": [
+      "flight",
+      "aviation",
+      "video",
+      "YouTube",
+      "reference"
+    ],
+    "actionRequired": "false",
+    "estimatedTime": "Quick",
+    "needsMoreInfo": "true",
+    "urgencyLevel": "Later",
+    "aiProcessed": true,
+    "aiProcessedAt": "2025-07-16T17:56:39.484Z"
+  },
+  {
+    "id": "1752689001366",
+    "content": "Rolls royce new plane, review improvements",
+    "url": "https://www.linkedin.com/company/rolls-royce/posts/?feedView=all",
+    "relevanceDate": null,
+    "relevanceEvent": null,
+    "createdAt": "2025-07-16T18:03:21.366Z",
+    "isProcessed": false,
+    "folder": "Aviation Industry Updates",
+    "priority": "Medium",
+    "summary": "Review of improvements in Rolls-Royce's new plane, with more details available on their LinkedIn feed.",
+    "tags": [
+      "Rolls-Royce",
+      "aviation",
+      "plane improvements",
+      "industry news",
+      "technology"
+    ],
+    "actionRequired": false,
+    "estimatedTime": "Quick",
+    "needsMoreInfo": true,
+    "urgencyLevel": "Later",
+    "aiProcessed": true,
+    "aiProcessedAt": "2025-07-16T18:03:23.054Z"
   }
 ]
