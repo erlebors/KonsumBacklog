@@ -33,12 +33,15 @@ class TipsService {
     this.dataPath = path.join(process.cwd(), 'data', 'tips.json');
     this.isProduction = process.env.NODE_ENV === 'production';
     
-    // Initialize Redis in production if UPSTASH_REDIS_REST_URL is available
+    // Initialize Redis in production if environment variables are available
     if (this.isProduction && process.env.UPSTASH_REDIS_REST_URL) {
-      this.redis = new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-      });
+      try {
+        this.redis = Redis.fromEnv();
+        console.log('Upstash Redis initialized successfully');
+      } catch (error) {
+        console.warn('Failed to initialize Upstash Redis:', error);
+        this.redis = null;
+      }
     }
     
     this.loadTips();
