@@ -470,13 +470,49 @@ export default function ReviewPage() {
                                   <ExternalLink className="w-4 h-4 text-indigo-600" />
                                   <span className="text-sm font-medium text-indigo-900">Page Summary</span>
                                 </div>
-                                <div className="text-sm text-indigo-800">
-                                  {tip.pageSummary.split('\n').map((bullet, index) => (
-                                    <div key={index} className="flex items-start mb-1">
-                                      <span className="mr-2 text-indigo-600">•</span>
-                                      <span>{bullet.trim()}</span>
-                                    </div>
-                                  ))}
+                                <div className="text-sm text-indigo-800 space-y-1">
+                                  {(() => {
+                                    let summaryText = '';
+                                    if (typeof tip.pageSummary === 'string') {
+                                      summaryText = tip.pageSummary;
+                                    } else if (Array.isArray(tip.pageSummary)) {
+                                      summaryText = (tip.pageSummary as string[]).join('\n');
+                                    } else if (tip.pageSummary && typeof tip.pageSummary === 'object') {
+                                      summaryText = JSON.stringify(tip.pageSummary);
+                                    } else {
+                                      summaryText = String(tip.pageSummary || '');
+                                    }
+                                    
+                                    // Force split the text into bullet points
+                                    let bullets: string[] = [];
+                                    
+                                    // Remove any existing bullet points
+                                    summaryText = summaryText.replace(/^•\s*/, '').replace(/•/g, '');
+                                    
+                                    // Try multiple splitting strategies
+                                    if (summaryText.includes(',.')) {
+                                      bullets = summaryText.split(',.').map(s => s.trim()).filter(s => s.length > 0);
+                                    } else if (summaryText.includes('.,')) {
+                                      bullets = summaryText.split('.,').map(s => s.trim()).filter(s => s.length > 0);
+                                    } else if (summaryText.match(/\.\s+[A-Z]/)) {
+                                      bullets = summaryText.split(/\.\s+(?=[A-Z])/).map(s => s.trim()).filter(s => s.length > 0);
+                                    } else {
+                                      // Last resort: split by any period followed by space
+                                      bullets = summaryText.split(/\.\s+/).map(s => s.trim()).filter(s => s.length > 0);
+                                    }
+                                    
+                                    // If we still have issues, force split by commas
+                                    if (bullets.length <= 1) {
+                                      bullets = summaryText.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                                    }
+                                    
+                                    return bullets.map((bullet, index) => (
+                                      <div key={index} className="flex items-start">
+                                        <span className="mr-2 text-indigo-600 mt-0.5 flex-shrink-0">•</span>
+                                        <span className="leading-relaxed">{bullet}</span>
+                                      </div>
+                                    ));
+                                  })()}
                                 </div>
                               </div>
                             )}
@@ -488,15 +524,25 @@ export default function ReviewPage() {
                             
                             {/* URL */}
                             {tip.url && (
-                              <a
-                                href={tip.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-3"
-                              >
-                                <Calendar className="w-4 h-4 mr-1" />
-                                {tip.url}
-                              </a>
+                              <div className="mb-3">
+                                <a
+                                  href={tip.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                                  title={tip.url}
+                                >
+                                  <ExternalLink className="w-4 h-4 mr-1" />
+                                  {(() => {
+                                    try {
+                                      const url = new URL(tip.url);
+                                      return url.hostname.replace('www.', '');
+                                    } catch {
+                                      return 'Visit Link';
+                                    }
+                                  })()}
+                                </a>
+                              </div>
                             )}
 
                             {/* User Context */}
@@ -507,21 +553,6 @@ export default function ReviewPage() {
                                   <span className="text-sm font-medium text-green-900">Your Context</span>
                                 </div>
                                 <p className="text-sm text-green-800">{tip.userContext}</p>
-                              </div>
-                            )}
-
-                            {/* AI Tags */}
-                            {tip.tags && tip.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-3">
-                                {tip.tags.map((tag, index) => (
-                                  <span
-                                    key={index}
-                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800"
-                                  >
-                                    <Tag className="w-3 h-3 mr-1" />
-                                    {tag}
-                                  </span>
-                                ))}
                               </div>
                             )}
 

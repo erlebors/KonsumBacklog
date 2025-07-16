@@ -278,7 +278,30 @@ const processTipWithAI = async (tip: Tip) => {
           folder: aiAnalysis.folder || 'Uncategorized',
           priority: aiAnalysis.priority || 'Medium',
           summary: aiAnalysis.summary || '',
-          pageSummary: aiAnalysis.pageSummary || '',
+          pageSummary: (() => {
+            // Ensure pageSummary is always a properly formatted string
+            let pageSummary = aiAnalysis.pageSummary || '';
+            
+            if (typeof pageSummary === 'string') {
+              // If it's already a string, ensure it has proper bullet point formatting
+              if (!pageSummary.includes('•') && !pageSummary.includes('*')) {
+                // Split by newlines and add bullet points if they don't exist
+                const lines = pageSummary.split('\n').filter(line => line.trim().length > 0);
+                pageSummary = lines.map(line => `• ${line.trim()}`).join('\n');
+              }
+            } else {
+              // For any other type, convert to string and format
+              const summaryStr = String(pageSummary || '');
+              if (summaryStr.trim()) {
+                const lines = summaryStr.split('\n').filter(line => line.trim().length > 0);
+                pageSummary = lines.map(line => `• ${line.trim()}`).join('\n');
+              } else {
+                pageSummary = '';
+              }
+            }
+            
+            return pageSummary;
+          })(),
           tags: aiAnalysis.tags || [],
           actionRequired: aiAnalysis.actionRequired || false,
           estimatedTime: aiAnalysis.estimatedTime || 'Medium',

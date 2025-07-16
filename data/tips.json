@@ -71,5 +71,31 @@
     "urgencyLevel": "This Month",
     "aiProcessed": true,
     "aiProcessedAt": "2025-07-16T17:25:15.120Z"
+  },
+  {
+    "id": "1752705054916",
+    "content": "les etterpå",
+    "url": "https://www.shifter.no/nyheter/arkwright-x-investerer-i-svensk-energiteknologi-med-enhjorning-erfaring/411049",
+    "relevanceDate": null,
+    "relevanceEvent": null,
+    "createdAt": "2025-07-16T22:30:54.916Z",
+    "isProcessed": false,
+    "folder": "Energy Technology Investments 2025",
+    "priority": "Medium",
+    "summary": "Arkwright X invests €1.25M in Swedish energy tech leader Qurrent, which is expanding into Norway with innovative battery and renewable energy optimization solutions.",
+    "pageSummary": "• Qurrent, a Swedish leader in energy technology, is expanding into Norway with support from Arkwright X and Verbund.,Arkwright X invested €1.25M, citing the growing need for flexibility services in the energy sector as a key driver.,Qurrent's platform optimizes battery and renewable energy usage, offering market access and predictive algorithms to customers.",
+    "tags": [
+      "energy technology",
+      "investments",
+      "renewable energy",
+      "Norway expansion",
+      "Arkwright X"
+    ],
+    "actionRequired": false,
+    "estimatedTime": "Quick",
+    "needsMoreInfo": true,
+    "urgencyLevel": "Later",
+    "aiProcessed": true,
+    "aiProcessedAt": "2025-07-16T22:30:58.103Z"
   }
 ]
