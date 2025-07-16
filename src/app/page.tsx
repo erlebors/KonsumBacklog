@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Plus, Clock, Bell } from 'lucide-react';
-//import NewTipModal from '@/components/NewTipModal';
+import NewTipModal from '@/components/NewTipModal';
 import Link from 'next/link';
 
 export default function Home() {

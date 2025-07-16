@@ -1,37 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-// In-memory storage for demo purposes
-let tips: any[] = [];
-
-// Load tips from file
-const loadTips = async () => {
-  try {
-    const dataPath = path.join(process.cwd(), 'data', 'tips.json');
-    const data = await fs.readFile(dataPath, 'utf-8');
-    tips = JSON.parse(data);
-  } catch (error) {
-    tips = [];
-  }
-};
-
-// Save tips to file
-const saveTips = async () => {
-  try {
-    const dataPath = path.join(process.cwd(), 'data');
-    await fs.mkdir(dataPath, { recursive: true });
-    await fs.writeFile(
-      path.join(dataPath, 'tips.json'),
-      JSON.stringify(tips, null, 2)
-    );
-  } catch (error) {
-    console.error('Error saving tips:', error);
-  }
-};
-
-// Initialize tips on module load
-loadTips();
+import { tipsService } from '@/lib/tipsService';
 
 export async function PATCH(
   request: NextRequest,
@@ -41,21 +9,17 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     
-    const tipIndex = tips.findIndex(tip => tip.id === id);
-    if (tipIndex === -1) {
+    const updatedTip = await tipsService.updateTip(id, body);
+    if (!updatedTip) {
       return NextResponse.json(
         { error: 'Tip not found' },
         { status: 404 }
       );
     }
 
-    // Update the tip
-    tips[tipIndex] = { ...tips[tipIndex], ...body };
-    await saveTips();
-
     return NextResponse.json({ 
       message: 'Tip updated successfully',
-      tip: tips[tipIndex]
+      tip: updatedTip
     });
   } catch (error) {
     console.error('Error updating tip:', error);
@@ -73,17 +37,13 @@ export async function DELETE(
   try {
     const { id } = await params;
     
-    const tipIndex = tips.findIndex(tip => tip.id === id);
-    if (tipIndex === -1) {
+    const success = await tipsService.deleteTip(id);
+    if (!success) {
       return NextResponse.json(
         { error: 'Tip not found' },
         { status: 404 }
       );
     }
-
-    // Remove the tip
-    tips.splice(tipIndex, 1);
-    await saveTips();
 
     return NextResponse.json({ 
       message: 'Tip deleted successfully'

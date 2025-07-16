@@ -1,40 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AzureOpenAI } from 'openai';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-// In-memory storage for demo purposes
-// In production, you'd use a database
-let tips: any[] = [];
-
-// Load tips from file on startup
-const loadTips = async () => {
-  try {
-    const dataPath = path.join(process.cwd(), 'data', 'tips.json');
-    const data = await fs.readFile(dataPath, 'utf-8');
-    tips = JSON.parse(data);
-  } catch (error) {
-    // File doesn't exist yet, start with empty array
-    tips = [];
-  }
-};
-
-// Save tips to file
-const saveTips = async () => {
-  try {
-    const dataPath = path.join(process.cwd(), 'data');
-    await fs.mkdir(dataPath, { recursive: true });
-    await fs.writeFile(
-      path.join(dataPath, 'tips.json'),
-      JSON.stringify(tips, null, 2)
-    );
-  } catch (error) {
-    console.error('Error saving tips:', error);
-  }
-};
-
-// Initialize tips on module load
-loadTips();
+import { tipsService, Tip } from '@/lib/tipsService';
 
 // Function to extract JSON from AI response
 const extractJSONFromResponse = (response: string): any => {
@@ -75,18 +41,84 @@ const parseRelativeDate = (text: string): string | null => {
   
   // Common relative date patterns
   const patterns = [
-    { pattern: /this weekend|next weekend/, days: 2 }, // This weekend
-    { pattern: /next week/, days: 7 }, // Next week
-    { pattern: /in (\d+) days?/, extract: (match: RegExpMatchArray) => parseInt(match[1]) },
-    { pattern: /in (\d+) weeks?/, extract: (match: RegExpMatchArray) => parseInt(match[1]) * 7 },
-    { pattern: /in (\d+) months?/, extract: (match: RegExpMatchArray) => parseInt(match[1]) * 30 },
-    { pattern: /tomorrow/, days: 1 },
-    { pattern: /today/, days: 0 },
-    { pattern: /next month/, days: 30 },
-    { pattern: /next year/, days: 365 },
-    { pattern: /asap|urgent|immediately/, days: 0 },
-    { pattern: /soon/, days: 3 },
-    { pattern: /later/, days: 14 },
+    { 
+      pattern: /this weekend/, 
+      extract: () => {
+        // Calculate this weekend (next Saturday)
+        const currentDay = today.getDay(); // 0 = Sunday, 6 = Saturday
+        const daysUntilSaturday = (6 - currentDay + 7) % 7;
+        const daysToAdd = daysUntilSaturday === 0 ? 7 : daysUntilSaturday; // If today is Saturday, go to next Saturday
+        const resultDate = new Date(today);
+        resultDate.setDate(today.getDate() + daysToAdd);
+        return resultDate.toISOString().split('T')[0];
+      }
+    },
+    { 
+      pattern: /next weekend/, 
+      extract: () => {
+        // Calculate next weekend (Saturday after this weekend)
+        const currentDay = today.getDay();
+        const daysUntilSaturday = (6 - currentDay + 7) % 7;
+        const daysToAdd = daysUntilSaturday + 7; // Add 7 more days for next weekend
+        const resultDate = new Date(today);
+        resultDate.setDate(today.getDate() + daysToAdd);
+        return resultDate.toISOString().split('T')[0];
+      }
+    },
+    { pattern: /next week/, extract: () => {
+      const resultDate = new Date(today);
+      resultDate.setDate(today.getDate() + 7);
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /in (\d+) days?/, extract: (match: RegExpMatchArray) => {
+      const days = parseInt(match[1]);
+      const resultDate = new Date(today);
+      resultDate.setDate(today.getDate() + days);
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /in (\d+) weeks?/, extract: (match: RegExpMatchArray) => {
+      const weeks = parseInt(match[1]);
+      const resultDate = new Date(today);
+      resultDate.setDate(today.getDate() + (weeks * 7));
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /in (\d+) months?/, extract: (match: RegExpMatchArray) => {
+      const months = parseInt(match[1]);
+      const resultDate = new Date(today);
+      resultDate.setMonth(today.getMonth() + months);
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /tomorrow/, extract: () => {
+      const resultDate = new Date(today);
+      resultDate.setDate(today.getDate() + 1);
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /today/, extract: () => {
+      return today.toISOString().split('T')[0];
+    }},
+    { pattern: /next month/, extract: () => {
+      const resultDate = new Date(today);
+      resultDate.setMonth(today.getMonth() + 1);
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /next year/, extract: () => {
+      const resultDate = new Date(today);
+      resultDate.setFullYear(today.getFullYear() + 1);
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /asap|urgent|immediately/, extract: () => {
+      return today.toISOString().split('T')[0];
+    }},
+    { pattern: /soon/, extract: () => {
+      const resultDate = new Date(today);
+      resultDate.setDate(today.getDate() + 3);
+      return resultDate.toISOString().split('T')[0];
+    }},
+    { pattern: /later/, extract: () => {
+      const resultDate = new Date(today);
+      resultDate.setDate(today.getDate() + 14);
+      return resultDate.toISOString().split('T')[0];
+    }},
     { pattern: /next (\w+)/, extract: (match: RegExpMatchArray) => {
       const day = match[1];
       const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -94,7 +126,10 @@ const parseRelativeDate = (text: string): string | null => {
       if (targetDay !== -1) {
         const currentDay = today.getDay();
         const daysUntil = (targetDay - currentDay + 7) % 7;
-        return daysUntil === 0 ? 7 : daysUntil;
+        const daysToAdd = daysUntil === 0 ? 7 : daysUntil;
+        const resultDate = new Date(today);
+        resultDate.setDate(today.getDate() + daysToAdd);
+        return resultDate.toISOString().split('T')[0];
       }
       return null;
     }}
@@ -103,16 +138,9 @@ const parseRelativeDate = (text: string): string | null => {
   for (const pattern of patterns) {
     const match = lowerText.match(pattern.pattern);
     if (match) {
-      let daysToAdd: number | null = null;
-      if ('extract' in pattern && pattern.extract) {
-        daysToAdd = pattern.extract(match);
-      } else if ('days' in pattern) {
-        daysToAdd = pattern.days;
-      }
-      if (daysToAdd !== null && daysToAdd !== undefined) {
-        const resultDate = new Date(today);
-        resultDate.setDate(today.getDate() + daysToAdd);
-        return resultDate.toISOString().split('T')[0];
+      const extractedDate = pattern.extract(match);
+      if (extractedDate) {
+        return extractedDate;
       }
     }
   }
@@ -121,7 +149,7 @@ const parseRelativeDate = (text: string): string | null => {
 };
 
 // AI processing function
-const processTipWithAI = async (tip: any) => {
+const processTipWithAI = async (tip: Tip) => {
   try {
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
     const modelName = process.env.AZURE_OPENAI_MODEL_NAME;
@@ -159,7 +187,6 @@ const processTipWithAI = async (tip: any) => {
       "actionRequired": "true/false - whether this tip requires any action",
       "estimatedTime": "Quick/Medium/Long - estimated time to process this tip",
       "needsMoreInfo": "true/false - whether this tip needs additional context from the user to be properly organized",
-      "extractedDate": "YYYY-MM-DD format if you can extract a specific date from the content, or null if no date found",
       "urgencyLevel": "Immediate/This Week/This Month/Later - based on time sensitivity"
     }
 
@@ -177,19 +204,18 @@ const processTipWithAI = async (tip: any) => {
     - Action Required: true if the tip needs follow-up or action, false if it's just reference material
     - Estimated Time: Quick (<15 min), Medium (15-60 min), Long (>60 min)
     - Needs More Info: true if the tip lacks context about when/why it's relevant, false if it's self-contained
-    - Extracted Date: Look for specific dates, relative dates (e.g., "this weekend", "next week", "in 2 weeks"), or time-sensitive language in the content
     - Urgency Level: 
-      * "Immediate" for today/tomorrow/ASAP
-      * "This Week" for this week/next few days
-      * "This Month" for next week/this month
+      * "Immediate" for today/tomorrow/ASAP/urgent
+      * "This Week" for this week/next few days/this weekend
+      * "This Month" for next week/this month/in a few weeks
       * "Later" for next month or beyond
 
-    DATE EXTRACTION EXAMPLES:
-    - "roadtrip is this weekend" → extractedDate: calculate this weekend's date
-    - "meeting with john is in two weeks" → extractedDate: calculate date in 2 weeks
-    - "deadline is next Friday" → extractedDate: calculate next Friday's date
+    TIME SENSITIVITY EXAMPLES:
+    - "roadtrip is this weekend" → urgencyLevel: "This Week"
+    - "meeting with john is in two weeks" → urgencyLevel: "This Month"
+    - "deadline is next Friday" → urgencyLevel: "This Week"
     - "urgent task" → urgencyLevel: "Immediate"
-    - "planning for next month" → urgencyLevel: "This Month"
+    - "planning for next month" → urgencyLevel: "Later"
 
     Respond ONLY with valid JSON. Do not include any other text, markdown formatting, or code blocks.
     `;
@@ -212,8 +238,8 @@ const processTipWithAI = async (tip: any) => {
         const aiAnalysis = extractJSONFromResponse(response.choices[0].message.content);
         console.log('AI Analysis:', aiAnalysis);
         
-        // Parse relative dates from content if AI didn't extract a specific date
-        let finalDate = tip.relevanceDate || aiAnalysis.extractedDate;
+        // Parse relative dates from content using our local function
+        let finalDate = tip.relevanceDate;
         if (!finalDate && tip.content) {
           finalDate = parseRelativeDate(tip.content);
         }
@@ -261,7 +287,8 @@ const processTipWithAI = async (tip: any) => {
 
 export async function GET() {
   try {
-    return NextResponse.json({ tips });
+    const allTips = await tipsService.getAllTips();
+    return NextResponse.json({ tips: allTips });
   } catch (error) {
     console.error('Error fetching tips:', error);
     return NextResponse.json(
@@ -283,7 +310,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newTip = {
+    const newTip: Tip = {
       id: Date.now().toString(),
       content: content || '',
       url: url || '',
@@ -296,8 +323,7 @@ export async function POST(request: NextRequest) {
     // Process with AI
     const processedTip = await processTipWithAI(newTip);
     
-    tips.push(processedTip);
-    await saveTips();
+    await tipsService.addTip(processedTip);
 
     return NextResponse.json({ 
       message: 'Tip created successfully',

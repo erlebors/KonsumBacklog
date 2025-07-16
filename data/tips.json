@@ -1,14 +1,5 @@
 [
   {
-    "id": "1752681754569",
-    "content": "Muesum of spies",
-    "url": "",
-    "relevanceDate": null,
-    "relevanceEvent": "roadtrip til DC",
-    "createdAt": "2025-07-16T16:02:34.569Z",
-    "isProcessed": false
-  },
-  {
     "id": "1752682683473",
     "content": "Cross new york over terry town cuomo bridge",
     "url": "",
@@ -30,5 +21,55 @@
     "estimatedTime": "Quick",
     "aiProcessed": true,
     "aiProcessedAt": "2025-07-16T16:18:05.024Z"
+  },
+  {
+    "id": "1752686696002",
+    "content": "Roadtrip is this weekend, need to pack everything",
+    "url": "",
+    "relevanceDate": "2025-07-19",
+    "relevanceEvent": "roadtrip to DC",
+    "createdAt": "2025-07-16T17:24:56.002Z",
+    "isProcessed": false,
+    "folder": "Roadtrip to DC",
+    "priority": "High",
+    "summary": "Prepare and pack everything needed for the roadtrip to Washington DC happening this weekend.",
+    "tags": [
+      "roadtrip",
+      "travel",
+      "packing",
+      "DC",
+      "weekend"
+    ],
+    "actionRequired": true,
+    "estimatedTime": "Medium",
+    "needsMoreInfo": true,
+    "urgencyLevel": "This Week",
+    "aiProcessed": true,
+    "aiProcessedAt": "2025-07-16T17:24:57.749Z"
+  },
+  {
+    "id": "1752686713297",
+    "content": "Meeting with John is in two weeks about the project timeline",
+    "url": "",
+    "relevanceDate": null,
+    "relevanceEvent": "work meeting",
+    "createdAt": "2025-07-16T17:25:13.297Z",
+    "isProcessed": false,
+    "folder": "Project Timeline Discussions",
+    "priority": "Medium",
+    "summary": "A meeting with John is scheduled in two weeks to discuss the project timeline.",
+    "tags": [
+      "work",
+      "meeting",
+      "project timeline",
+      "John",
+      "planning"
+    ],
+    "actionRequired": true,
+    "estimatedTime": "Medium",
+    "needsMoreInfo": true,
+    "urgencyLevel": "This Month",
+    "aiProcessed": true,
+    "aiProcessedAt": "2025-07-16T17:25:15.120Z"
   }
 ]
