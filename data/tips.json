@@ -1,1 +1,48 @@
-[]
+[
+  {
+    "id": "1752795930783dkvrdrtiv",
+    "content": "Final Firebase Admin test",
+    "url": "",
+    "title": "Firebase Admin Test Completion",
+    "relevanceDate": null,
+    "relevanceEvent": null,
+    "createdAt": "2025-07-17T23:45:30.783Z",
+    "folder": "Firebase",
+    "priority": "5",
+    "summary": [
+      "• This tip emphasizes the importance of completing the final Firebase Admin test.",
+      "• Ensure that all necessary preparations are made before attempting the test.",
+      "• Review Firebase documentation to enhance understanding and performance."
+    ],
+    "tags": [],
+    "actionRequired": false,
+    "isProcessed": false,
+    "aiProcessed": true,
+    "userContext": "",
+    "needsMoreInfo": false,
+    "urgencyLevel": "medium"
+  },
+  {
+    "id": "1752795932870cynjqv9tk",
+    "content": "No custom folders available",
+    "url": "",
+    "title": "Lack of Custom Folders",
+    "relevanceDate": null,
+    "relevanceEvent": null,
+    "createdAt": "2025-07-17T23:45:32.870Z",
+    "folder": "Organization",
+    "priority": "3",
+    "summary": [
+      "• This tip highlights the absence of custom folders for organization.",
+      "• Consider alternative methods for organizing files and resources.",
+      "• Explore existing folder structures to maximize efficiency."
+    ],
+    "tags": [],
+    "actionRequired": false,
+    "isProcessed": false,
+    "aiProcessed": true,
+    "userContext": "",
+    "needsMoreInfo": false,
+    "urgencyLevel": "low"
+  }
+]

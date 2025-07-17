@@ -42,24 +42,27 @@ if (process.env.FIREBASE_PROJECT_ID &&
     process.env.FIREBASE_CLIENT_EMAIL && 
     process.env.FIREBASE_PRIVATE_KEY) {
   try {
-    // Import Firebase Admin using require
-    const firebaseAdmin = require('firebase-admin');
+    // Import Firebase Admin using the correct structure
+    const admin = require('firebase-admin');
     
-    // Check if Firebase Admin is properly imported
-    if (!firebaseAdmin.getAuth || !firebaseAdmin.initializeApp || !firebaseAdmin.getApps || !firebaseAdmin.cert) {
+    // Get the functions from the default export
+    const adminDefault = admin.default || admin;
+    
+    // Check if Firebase Admin functions are available
+    if (!adminDefault.getAuth || !adminDefault.initializeApp || !adminDefault.getApps || !admin.credential?.cert) {
       console.error('Firebase Admin functions not available:', {
-        getAuth: !!firebaseAdmin.getAuth,
-        initializeApp: !!firebaseAdmin.initializeApp,
-        getApps: !!firebaseAdmin.getApps,
-        cert: !!firebaseAdmin.cert
+        getAuth: !!adminDefault.getAuth,
+        initializeApp: !!adminDefault.initializeApp,
+        getApps: !!adminDefault.getApps,
+        cert: !!admin.credential?.cert
       });
       throw new Error('Firebase Admin SDK not properly imported');
     }
     
-    getAuth = firebaseAdmin.getAuth;
-    initializeApp = firebaseAdmin.initializeApp;
-    getApps = firebaseAdmin.getApps;
-    cert = firebaseAdmin.cert;
+    getAuth = adminDefault.getAuth;
+    initializeApp = adminDefault.initializeApp;
+    getApps = adminDefault.getApps;
+    cert = admin.credential.cert;
     
     // Initialize Firebase Admin if not already initialized
     const apps = getApps();
