@@ -291,5 +291,28 @@
     "userContext": "",
     "needsMoreInfo": false,
     "urgencyLevel": "medium"
+  },
+  {
+    "id": "1752787264479",
+    "content": "Ikke dra til allentown",
+    "url": "",
+    "title": "Ikke dra til allentown",
+    "relevanceDate": null,
+    "relevanceEvent": null,
+    "createdAt": "2025-07-17T21:21:04.479Z",
+    "folder": "Roadtrip to DC",
+    "priority": "5",
+    "summary": [
+      "• The tip advises against traveling to Allentown.",
+      "• It suggests that there may be reasons to avoid this destination.",
+      "• The advice could be based on personal experiences or general perceptions."
+    ],
+    "tags": [],
+    "actionRequired": false,
+    "isProcessed": false,
+    "aiProcessed": true,
+    "userContext": "",
+    "needsMoreInfo": false,
+    "urgencyLevel": "medium"
   }
 ]
