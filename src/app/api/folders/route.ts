@@ -15,8 +15,9 @@ export async function GET(request: NextRequest) {
       try {
         folders = await firestoreService.getAllFolders(userId);
       } catch (error) {
-        console.error('Error fetching from Firestore, falling back to demo mode:', error);
-        folders = await foldersService.getAllFolders();
+        console.error('Error fetching from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return empty array instead
+        return NextResponse.json([]);
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured
@@ -52,12 +53,9 @@ export async function POST(request: NextRequest) {
           color: color || '#3B82F6', // Default blue color
         });
       } catch (error) {
-        console.error('Error saving to Firestore, falling back to demo mode:', error);
-        folder = await foldersService.addFolder({
-          name: name.trim(),
-          description: description?.trim(),
-          color: color || '#3B82F6', // Default blue color
-        });
+        console.error('Error saving to Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return error instead
+        return NextResponse.json({ error: 'Failed to save to Firestore' }, { status: 500 });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured
@@ -101,12 +99,9 @@ export async function PUT(request: NextRequest) {
           color,
         });
       } catch (error) {
-        console.error('Error updating in Firestore, falling back to demo mode:', error);
-        folder = await foldersService.updateFolder(id, {
-          name: name.trim(),
-          description: description?.trim(),
-          color,
-        });
+        console.error('Error updating in Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return error instead
+        return NextResponse.json({ error: 'Failed to update in Firestore' }, { status: 500 });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured
@@ -147,8 +142,9 @@ export async function DELETE(request: NextRequest) {
       try {
         success = await firestoreService.deleteFolder(userId, id);
       } catch (error) {
-        console.error('Error deleting from Firestore, falling back to demo mode:', error);
-        success = await foldersService.deleteFolder(id);
+        console.error('Error deleting from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return error instead
+        return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured

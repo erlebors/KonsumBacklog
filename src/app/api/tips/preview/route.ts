@@ -41,8 +41,9 @@ export async function POST(request: NextRequest) {
       try {
         customFolders = await firestoreService.getFolderNames(userId);
       } catch (error) {
-        console.error('Error fetching from Firestore, falling back to demo mode:', error);
-        customFolders = await foldersService.getFolderNames();
+        console.error('Error fetching from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - use empty array instead
+        customFolders = [];
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured

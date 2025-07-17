@@ -21,8 +21,9 @@ export async function PATCH(
       try {
         updatedTip = await firestoreService.updateTip(userId, id, body);
       } catch (error) {
-        console.error('Error updating in Firestore, falling back to demo mode:', error);
-        updatedTip = await tipsService.updateTip(id, body);
+        console.error('Error updating in Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return error instead
+        return NextResponse.json({ error: 'Failed to update in Firestore' }, { status: 500 });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured
@@ -66,8 +67,9 @@ export async function DELETE(
       try {
         success = await firestoreService.deleteTip(userId, id);
       } catch (error) {
-        console.error('Error deleting from Firestore, falling back to demo mode:', error);
-        success = await tipsService.deleteTip(id);
+        console.error('Error deleting from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return error instead
+        return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured

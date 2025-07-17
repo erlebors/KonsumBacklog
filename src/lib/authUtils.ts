@@ -46,6 +46,7 @@ export async function getCurrentUser(request: NextRequest): Promise<string | nul
 
     // Get the Authorization header
     const authHeader = request.headers.get('authorization');
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return null;
     }

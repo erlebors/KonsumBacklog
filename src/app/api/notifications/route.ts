@@ -15,8 +15,12 @@ export async function GET(request: NextRequest) {
       try {
         tips = await firestoreService.getAllTips(userId);
       } catch (error) {
-        console.error('Error fetching from Firestore, falling back to demo mode:', error);
-        tips = await tipsService.getAllTips();
+        console.error('Error fetching from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return empty notifications instead
+        return NextResponse.json({ 
+          notifications: [],
+          count: 0
+        });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured

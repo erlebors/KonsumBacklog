@@ -16,27 +16,13 @@ export async function GET(request: NextRequest) {
       try {
         result = await firestoreService.getAvailableFolders(userId);
       } catch (error) {
-        console.error('Error fetching from Firestore, falling back to demo mode:', error);
-        // Fall back to demo mode if Firestore fails
-        const userFolders = await foldersService.getAllFolders();
-        const userFolderNames = userFolders.map(folder => folder.name);
-        const allTips = await tipsService.getAllTips();
-        const aiGeneratedFolders = new Set<string>();
-        
-        allTips.forEach(tip => {
-          if (tip.folder && tip.folder.trim()) {
-            aiGeneratedFolders.add(tip.folder.trim());
-          }
+        console.error('Error fetching from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return empty result instead
+        return NextResponse.json({
+          folders: [],
+          userFolders: [],
+          aiGeneratedFolders: []
         });
-
-        const allFolderNames = [...new Set([...userFolderNames, ...Array.from(aiGeneratedFolders)])];
-        allFolderNames.sort();
-
-        result = {
-          folders: allFolderNames,
-          userFolders: userFolderNames,
-          aiGeneratedFolders: Array.from(aiGeneratedFolders)
-        };
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured

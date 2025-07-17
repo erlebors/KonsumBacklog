@@ -22,8 +22,9 @@ export async function GET(request: NextRequest) {
       try {
         tips = await firestoreService.getAllTips(userId);
       } catch (error) {
-        console.error('Error fetching from Firestore, falling back to demo mode:', error);
-        tips = await tipsService.getAllTips();
+        console.error('Error fetching from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return empty array instead
+        return NextResponse.json([]);
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured
@@ -58,12 +59,9 @@ export async function POST(request: NextRequest) {
           savedTips.push(savedTip);
         }
       } catch (error) {
-        console.error('Error saving to Firestore, falling back to demo mode:', error);
-        // Fall back to demo mode if Firestore fails
-        for (const tip of tips) {
-          await tipsService.addTip(tip);
-          savedTips.push(tip);
-        }
+        console.error('Error saving to Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return error instead
+        return NextResponse.json({ error: 'Failed to save to Firestore' }, { status: 500 });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured
@@ -351,8 +349,9 @@ export async function DELETE(request: NextRequest) {
       try {
         await firestoreService.deleteTip(userId, id);
       } catch (error) {
-        console.error('Error deleting from Firestore, falling back to demo mode:', error);
-        await tipsService.deleteTip(id);
+        console.error('Error deleting from Firestore:', error);
+        // Don't fall back to demo mode for authenticated users - return error instead
+        return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
       }
     } else {
       // Use demo mode for unauthenticated users or when Firebase Admin is not configured
