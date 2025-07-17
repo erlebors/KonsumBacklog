@@ -17,7 +17,7 @@ A web application for organizing tips, links, LinkedIn posts, and other useful i
    npm install
    ```
 
-2. **Configure OpenAI** (Optional)
+2. **Configure Environment Variables**
    
    Create a `.env.local` file in the root directory with your OpenAI API key:
    ```
@@ -34,6 +34,26 @@ A web application for organizing tips, links, LinkedIn posts, and other useful i
 4. **Open your browser**
    
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+## Deployment
+
+### Environment Variables Required
+
+For deployment (Vercel, Netlify, etc.), you need to set these environment variables:
+
+- **`OPENAI_API_KEY`** (Required): Your OpenAI API key for AI features
+
+### Vercel Deployment
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. In Vercel dashboard, go to **Settings** → **Environment Variables**
+4. Add `OPENAI_API_KEY` with your API key value
+5. Deploy
+
+### Other Platforms
+
+Set the `OPENAI_API_KEY` environment variable in your deployment platform's settings.
 
 ## Usage
 
@@ -64,7 +84,7 @@ This demo uses local file storage (`data/tips.json`). In production, you should:
 ## Technologies Used
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **AI**: OpenAI GPT-3.5 Turbo
+- **AI**: OpenAI GPT-4o-mini
 - **Icons**: Lucide React
 - **Notifications**: React Hot Toast
 - **Date Handling**: date-fns

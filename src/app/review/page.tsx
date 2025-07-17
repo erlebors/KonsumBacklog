@@ -602,10 +602,6 @@ export default function ReviewPage() {
                                 </ul>
                               </div>
                             )}
-
-                            {subFolder.tip.content && (
-                              <p className="text-gray-900 text-base mb-3 line-clamp-2">{subFolder.tip.content}</p>
-                            )}
                             
                             {subFolder.tip.url && (
                               <div className="mb-3">
