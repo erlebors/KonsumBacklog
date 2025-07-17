@@ -11,7 +11,6 @@ import {
   CheckCircle, 
   Trash2,
   Calendar,
-  Timer,
   Brain,
   Info,
   ChevronDown,
@@ -392,34 +391,6 @@ export default function ReviewPage() {
       newExpandedUrlPreviews.add(tipId);
     }
     setExpandedUrlPreviews(newExpandedUrlPreviews);
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority?.toLowerCase()) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getEstimatedTimeColor = (time: string) => {
-    switch (time?.toLowerCase()) {
-      case 'quick': return 'bg-green-100 text-green-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'long': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getUrgencyLevelColor = (urgencyLevel: string) => {
-    switch (urgencyLevel) {
-      case 'Immediate': return 'bg-red-100 text-red-800 border-red-200';
-      case 'This Week': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'This Month': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Later': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
   };
 
   const folderGroups = organizeByFolder(getFilteredTips());
