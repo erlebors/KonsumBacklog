@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { foldersService } from '@/lib/foldersService';
+import { firestoreService } from '@/lib/firestoreService';
+import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const folders = await foldersService.getAllFolders();
+    let folders;
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        folders = await firestoreService.getAllFolders(userId);
+      } catch (error) {
+        console.error('Error fetching from Firestore, falling back to demo mode:', error);
+        folders = await foldersService.getAllFolders();
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      folders = await foldersService.getAllFolders();
+    }
+    
     return NextResponse.json(folders);
   } catch (error) {
     console.error('Error fetching folders:', error);
@@ -19,11 +38,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
-    const folder = await foldersService.addFolder({
-      name: name.trim(),
-      description: description?.trim(),
-      color: color || '#3B82F6', // Default blue color
-    });
+    let folder;
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        folder = await firestoreService.addFolder(userId, {
+          name: name.trim(),
+          description: description?.trim(),
+          color: color || '#3B82F6', // Default blue color
+        });
+      } catch (error) {
+        console.error('Error saving to Firestore, falling back to demo mode:', error);
+        folder = await foldersService.addFolder({
+          name: name.trim(),
+          description: description?.trim(),
+          color: color || '#3B82F6', // Default blue color
+        });
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      folder = await foldersService.addFolder({
+        name: name.trim(),
+        description: description?.trim(),
+        color: color || '#3B82F6', // Default blue color
+      });
+    }
 
     return NextResponse.json(folder);
   } catch (error) {
@@ -44,11 +87,35 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
-    const folder = await foldersService.updateFolder(id, {
-      name: name.trim(),
-      description: description?.trim(),
-      color,
-    });
+    let folder;
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        folder = await firestoreService.updateFolder(userId, id, {
+          name: name.trim(),
+          description: description?.trim(),
+          color,
+        });
+      } catch (error) {
+        console.error('Error updating in Firestore, falling back to demo mode:', error);
+        folder = await foldersService.updateFolder(id, {
+          name: name.trim(),
+          description: description?.trim(),
+          color,
+        });
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      folder = await foldersService.updateFolder(id, {
+        name: name.trim(),
+        description: description?.trim(),
+        color,
+      });
+    }
 
     if (!folder) {
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
@@ -70,7 +137,23 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
     }
 
-    const success = await foldersService.deleteFolder(id);
+    let success;
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        success = await firestoreService.deleteFolder(userId, id);
+      } catch (error) {
+        console.error('Error deleting from Firestore, falling back to demo mode:', error);
+        success = await foldersService.deleteFolder(id);
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      success = await foldersService.deleteFolder(id);
+    }
     
     if (!success) {
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 });

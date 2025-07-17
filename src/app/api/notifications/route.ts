@@ -1,32 +1,27 @@
-import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { NextRequest, NextResponse } from 'next/server';
+import { tipsService } from '@/lib/tipsService';
+import { firestoreService } from '@/lib/firestoreService';
+import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
 
-// In-memory storage for demo purposes
-let tips: Array<{
-  id: string;
-  content?: string;
-  relevanceDate?: string;
-  isProcessed?: boolean;
-}> = [];
-
-// Load tips from file
-const loadTips = async () => {
+export async function GET(request: NextRequest) {
   try {
-    const dataPath = path.join(process.cwd(), 'data', 'tips.json');
-    const data = await fs.readFile(dataPath, 'utf-8');
-    tips = JSON.parse(data);
-  } catch {
-    tips = [];
-  }
-};
-
-// Initialize tips on module load
-loadTips();
-
-export async function GET() {
-  try {
-    await loadTips(); // Refresh tips from file
+    let tips;
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        tips = await firestoreService.getAllTips(userId);
+      } catch (error) {
+        console.error('Error fetching from Firestore, falling back to demo mode:', error);
+        tips = await tipsService.getAllTips();
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      tips = await tipsService.getAllTips();
+    }
     
     const today = new Date();
     const urgentTips = tips.filter(tip => {
@@ -55,9 +50,10 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching notifications:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch notifications' },
-      { status: 500 }
-    );
+    // Return empty notifications instead of error to prevent 500
+    return NextResponse.json({ 
+      notifications: [],
+      count: 0
+    });
   }
 } 

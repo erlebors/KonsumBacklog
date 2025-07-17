@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { X, FileText, Brain, Folder, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { createAuthenticatedRequest } from '@/lib/clientAuth';
 
 interface NewTipModalProps {
   isOpen: boolean;
@@ -25,17 +27,19 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
   const [tipPreviews, setTipPreviews] = useState<TipPreview[]>([]);
   const [showPreviews, setShowPreviews] = useState(false);
   const [showFolderDropdown, setShowFolderDropdown] = useState(false);
+  const { user } = useAuth();
 
   // Fetch available folders when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchAvailableFolders();
     }
-  }, [isOpen]);
+  }, [isOpen, user]);
 
   const fetchAvailableFolders = async () => {
     try {
-      const response = await fetch('/api/folders/available');
+      const requestOptions = await createAuthenticatedRequest('/api/folders/available');
+      const response = await fetch('/api/folders/available', requestOptions);
       if (response.ok) {
         const data = await response.json();
         setAvailableFolders(data.folders || []);
@@ -63,13 +67,15 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
         createdAt: new Date().toISOString(),
       };
 
-      const response = await fetch('/api/tips', {
+      const requestOptions = await createAuthenticatedRequest('/api/tips', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(tipData),
       });
+
+      const response = await fetch('/api/tips', requestOptions);
 
       const result = await response.json();
 
@@ -105,7 +111,7 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
 
     setAiProcessing(true);
     try {
-      const response = await fetch('/api/tips/preview', {
+      const requestOptions = await createAuthenticatedRequest('/api/tips/preview', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,6 +121,8 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
           selectedFolder: selectedFolder.trim() || undefined,
         }),
       });
+
+      const response = await fetch('/api/tips/preview', requestOptions);
 
       const result = await response.json();
       if (response.ok && result.tips) {

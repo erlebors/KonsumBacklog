@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Folder, Edit3, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { createAuthenticatedRequest } from '@/lib/clientAuth';
 
 interface Folder {
   id: string;
@@ -51,7 +52,8 @@ export default function FolderModal({ isOpen, onClose, onFoldersChange }: Folder
 
   const fetchFolders = async () => {
     try {
-      const response = await fetch('/api/folders');
+      const requestOptions = await createAuthenticatedRequest('/api/folders');
+      const response = await fetch('/api/folders', requestOptions);
       if (response.ok) {
         const data = await response.json();
         setFolders(data);
@@ -79,13 +81,15 @@ export default function FolderModal({ isOpen, onClose, onFoldersChange }: Folder
         ? { id: editingFolder.id, ...formData }
         : formData;
 
-      const response = await fetch(url, {
+      const requestOptions = await createAuthenticatedRequest(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
       });
+
+      const response = await fetch(url, requestOptions);
 
       if (response.ok) {
         toast.success(editingFolder ? 'Folder updated!' : 'Folder created!');
@@ -107,9 +111,11 @@ export default function FolderModal({ isOpen, onClose, onFoldersChange }: Folder
     }
 
     try {
-      const response = await fetch(`/api/folders?id=${folderId}`, {
+      const requestOptions = await createAuthenticatedRequest(`/api/folders?id=${folderId}`, {
         method: 'DELETE',
       });
+
+      const response = await fetch(`/api/folders?id=${folderId}`, requestOptions);
 
       if (response.ok) {
         toast.success('Folder deleted!');
@@ -195,19 +201,18 @@ export default function FolderModal({ isOpen, onClose, onFoldersChange }: Folder
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Color
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 {colorOptions.map((color) => (
                   <button
                     key={color}
                     type="button"
                     onClick={() => setFormData({ ...formData, color })}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
-                      formData.color === color 
-                        ? 'border-gray-800 scale-110' 
+                    className={`w-8 h-8 rounded-full border-2 transition-colors ${
+                      formData.color === color
+                        ? 'border-gray-900'
                         : 'border-gray-300 hover:border-gray-500'
                     }`}
                     style={{ backgroundColor: color }}
-                    title={color}
                   />
                 ))}
               </div>
@@ -216,7 +221,7 @@ export default function FolderModal({ isOpen, onClose, onFoldersChange }: Folder
             <div className="flex space-x-3 pt-4">
               <button
                 type="button"
-                onClick={() => setShowCreateForm(false)}
+                onClick={handleClose}
                 className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
               >
                 Cancel
@@ -283,14 +288,14 @@ export default function FolderModal({ isOpen, onClose, onFoldersChange }: Folder
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => handleEdit(folder)}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                        className="text-blue-600 hover:text-blue-700 transition-colors"
                         title="Edit folder"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(folder.id)}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        className="text-red-600 hover:text-red-700 transition-colors"
                         title="Delete folder"
                       >
                         <Trash2 className="w-4 h-4" />

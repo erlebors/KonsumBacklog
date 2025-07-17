@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tipsService } from '@/lib/tipsService';
+import { firestoreService } from '@/lib/firestoreService';
+import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
 
 export async function PATCH(
   request: NextRequest,
@@ -9,7 +11,24 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     
-    const updatedTip = await tipsService.updateTip(id, body);
+    let updatedTip;
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        updatedTip = await firestoreService.updateTip(userId, id, body);
+      } catch (error) {
+        console.error('Error updating in Firestore, falling back to demo mode:', error);
+        updatedTip = await tipsService.updateTip(id, body);
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      updatedTip = await tipsService.updateTip(id, body);
+    }
+    
     if (!updatedTip) {
       return NextResponse.json(
         { error: 'Tip not found' },
@@ -37,7 +56,24 @@ export async function DELETE(
   try {
     const { id } = await params;
     
-    const success = await tipsService.deleteTip(id);
+    let success;
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        success = await firestoreService.deleteTip(userId, id);
+      } catch (error) {
+        console.error('Error deleting from Firestore, falling back to demo mode:', error);
+        success = await tipsService.deleteTip(id);
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      success = await tipsService.deleteTip(id);
+    }
+    
     if (!success) {
       return NextResponse.json(
         { error: 'Tip not found' },

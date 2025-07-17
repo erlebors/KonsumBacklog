@@ -2,15 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { tipsService, Tip } from '@/lib/tipsService';
 import { foldersService } from '@/lib/foldersService';
+import { firestoreService } from '@/lib/firestoreService';
+import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
 import { crawlWebPage } from '@/lib/webCrawler';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const tips = await tipsService.getAllTips();
+    let tips: Tip[] = [];
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        tips = await firestoreService.getAllTips(userId);
+      } catch (error) {
+        console.error('Error fetching from Firestore, falling back to demo mode:', error);
+        tips = await tipsService.getAllTips();
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      tips = await tipsService.getAllTips();
+    }
+    
     return NextResponse.json(tips);
   } catch (error) {
     console.error('Error fetching tips:', error);
@@ -27,9 +46,31 @@ export async function POST(request: NextRequest) {
 
     // Save all tips
     const savedTips = [];
-    for (const tip of tips) {
-      await tipsService.addTip(tip);
-      savedTips.push(tip);
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        for (const tip of tips) {
+          const savedTip = await firestoreService.addTip(userId, tip);
+          savedTips.push(savedTip);
+        }
+      } catch (error) {
+        console.error('Error saving to Firestore, falling back to demo mode:', error);
+        // Fall back to demo mode if Firestore fails
+        for (const tip of tips) {
+          await tipsService.addTip(tip);
+          savedTips.push(tip);
+        }
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      for (const tip of tips) {
+        await tipsService.addTip(tip);
+        savedTips.push(tip);
+      }
     }
 
     return NextResponse.json({
@@ -302,7 +343,22 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Tip ID is required' }, { status: 400 });
     }
 
-    await tipsService.deleteTip(id);
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        await firestoreService.deleteTip(userId, id);
+      } catch (error) {
+        console.error('Error deleting from Firestore, falling back to demo mode:', error);
+        await tipsService.deleteTip(id);
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      await tipsService.deleteTip(id);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting tip:', error);

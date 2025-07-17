@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { foldersService } from '@/lib/foldersService';
+import { firestoreService } from '@/lib/firestoreService';
+import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -29,7 +31,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Get custom folder names for AI categorization
-    const customFolders = await foldersService.getFolderNames();
+    let customFolders: string[];
+    
+    // Try to get authenticated user first
+    const userId = await getCurrentUser(request);
+    
+    if (userId && !isDemoMode()) {
+      // Use Firestore for authenticated users when Firebase Admin is configured
+      try {
+        customFolders = await firestoreService.getFolderNames(userId);
+      } catch (error) {
+        console.error('Error fetching from Firestore, falling back to demo mode:', error);
+        customFolders = await foldersService.getFolderNames();
+      }
+    } else {
+      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+      customFolders = await foldersService.getFolderNames();
+    }
+    
     const folderList = customFolders.length > 0 
       ? `Available custom folders: ${customFolders.join(', ')}` 
       : 'No custom folders available';

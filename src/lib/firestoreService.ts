@@ -1,51 +1,27 @@
 import { 
   collection, 
   doc, 
+  getDocs, 
+  getDoc, 
   addDoc, 
   updateDoc, 
   deleteDoc, 
-  getDocs, 
-  getDoc, 
   query, 
   where, 
-  orderBy, 
-  onSnapshot,
+  orderBy,
   serverTimestamp,
-  Timestamp
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Tip } from '@/lib/tipsService';
+import { Folder } from '@/lib/foldersService';
 
-export interface FirestoreTip {
-  id?: string;
+export interface FirestoreTip extends Omit<Tip, 'id'> {
   userId: string;
-  content: string;
-  url: string;
-  title?: string;
-  relevanceDate: string | null;
-  relevanceEvent: string | null;
-  createdAt: Timestamp;
-  folder?: string;
-  priority?: string;
-  summary?: string;
-  tags?: string[];
-  actionRequired?: boolean;
-  estimatedTime?: string;
-  isProcessed?: boolean;
-  aiProcessed?: boolean;
-  aiError?: string;
-  userContext?: string;
-  needsMoreInfo?: boolean;
-  urgencyLevel?: string;
 }
 
-export interface FirestoreFolder {
-  id?: string;
+export interface FirestoreFolder extends Omit<Folder, 'id'> {
   userId: string;
-  name: string;
-  description?: string;
-  color?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
 }
 
 class FirestoreService {
@@ -60,163 +36,245 @@ class FirestoreService {
   }
 
   // Tips methods
-  async addTip(userId: string, tip: Omit<FirestoreTip, 'id' | 'userId' | 'createdAt'>): Promise<FirestoreTip> {
-    const tipsCollection = this.getTipsCollection(userId);
-    const docRef = await addDoc(tipsCollection, {
-      ...tip,
-      userId,
-      createdAt: serverTimestamp(),
-    });
-    
-    return {
-      ...tip,
-      id: docRef.id,
-      userId,
-      createdAt: Timestamp.now(),
-    };
-  }
-
-  async updateTip(userId: string, tipId: string, updates: Partial<FirestoreTip>): Promise<void> {
-    const tipRef = doc(db, 'users', userId, 'tips', tipId);
-    await updateDoc(tipRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
-  }
-
-  async deleteTip(userId: string, tipId: string): Promise<void> {
-    const tipRef = doc(db, 'users', userId, 'tips', tipId);
-    await deleteDoc(tipRef);
-  }
-
-  async getTip(userId: string, tipId: string): Promise<FirestoreTip | null> {
-    const tipRef = doc(db, 'users', userId, 'tips', tipId);
-    const tipSnap = await getDoc(tipRef);
-    
-    if (tipSnap.exists()) {
-      return { id: tipSnap.id, ...tipSnap.data() } as FirestoreTip;
+  async getAllTips(userId: string): Promise<Tip[]> {
+    try {
+      const tipsQuery = query(
+        this.getTipsCollection(userId),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(tipsQuery);
+      
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Tip[];
+    } catch (error) {
+      console.error('Error fetching tips from Firestore:', error);
+      return [];
     }
-    return null;
   }
 
-  async getAllTips(userId: string): Promise<FirestoreTip[]> {
-    const tipsCollection = this.getTipsCollection(userId);
-    const q = query(tipsCollection, orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as FirestoreTip[];
+  async addTip(userId: string, tip: Omit<Tip, 'id'>): Promise<Tip> {
+    try {
+      const docRef = await addDoc(this.getTipsCollection(userId), {
+        ...tip,
+        userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
+      return {
+        ...tip,
+        id: docRef.id
+      };
+    } catch (error) {
+      console.error('Error adding tip to Firestore:', error);
+      throw error;
+    }
   }
 
-  // Real-time tips subscription
-  subscribeToTips(userId: string, callback: (tips: FirestoreTip[]) => void) {
-    const tipsCollection = this.getTipsCollection(userId);
-    const q = query(tipsCollection, orderBy('createdAt', 'desc'));
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const tips = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as FirestoreTip[];
-      callback(tips);
-    });
+  async updateTip(userId: string, tipId: string, updates: Partial<Tip>): Promise<Tip | null> {
+    try {
+      const tipRef = doc(this.getTipsCollection(userId), tipId);
+      const tipDoc = await getDoc(tipRef);
+      
+      if (!tipDoc.exists()) {
+        return null;
+      }
+
+      await updateDoc(tipRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+
+      return {
+        ...tipDoc.data(),
+        ...updates,
+        id: tipId
+      } as Tip;
+    } catch (error) {
+      console.error('Error updating tip in Firestore:', error);
+      throw error;
+    }
+  }
+
+  async deleteTip(userId: string, tipId: string): Promise<boolean> {
+    try {
+      const tipRef = doc(this.getTipsCollection(userId), tipId);
+      await deleteDoc(tipRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting tip from Firestore:', error);
+      return false;
+    }
+  }
+
+  async getTip(userId: string, tipId: string): Promise<Tip | null> {
+    try {
+      const tipRef = doc(this.getTipsCollection(userId), tipId);
+      const tipDoc = await getDoc(tipRef);
+      
+      if (!tipDoc.exists()) {
+        return null;
+      }
+
+      return {
+        ...tipDoc.data(),
+        id: tipId
+      } as Tip;
+    } catch (error) {
+      console.error('Error fetching tip from Firestore:', error);
+      return null;
+    }
   }
 
   // Folders methods
-  async addFolder(userId: string, folder: Omit<FirestoreFolder, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<FirestoreFolder> {
-    const foldersCollection = this.getFoldersCollection(userId);
-    const docRef = await addDoc(foldersCollection, {
-      ...folder,
-      userId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    
-    return {
-      ...folder,
-      id: docRef.id,
-      userId,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    };
-  }
-
-  async updateFolder(userId: string, folderId: string, updates: Partial<FirestoreFolder>): Promise<void> {
-    const folderRef = doc(db, 'users', userId, 'folders', folderId);
-    await updateDoc(folderRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
-  }
-
-  async deleteFolder(userId: string, folderId: string): Promise<void> {
-    const folderRef = doc(db, 'users', userId, 'folders', folderId);
-    await deleteDoc(folderRef);
-  }
-
-  async getFolder(userId: string, folderId: string): Promise<FirestoreFolder | null> {
-    const folderRef = doc(db, 'users', userId, 'folders', folderId);
-    const folderSnap = await getDoc(folderRef);
-    
-    if (folderSnap.exists()) {
-      return { id: folderSnap.id, ...folderSnap.data() } as FirestoreFolder;
+  async getAllFolders(userId: string): Promise<Folder[]> {
+    try {
+      const foldersQuery = query(
+        this.getFoldersCollection(userId),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(foldersQuery);
+      
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Folder[];
+    } catch (error) {
+      console.error('Error fetching folders from Firestore:', error);
+      return [];
     }
-    return null;
   }
 
-  async getAllFolders(userId: string): Promise<FirestoreFolder[]> {
-    const foldersCollection = this.getFoldersCollection(userId);
-    const q = query(foldersCollection, orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as FirestoreFolder[];
+  async addFolder(userId: string, folder: Omit<Folder, 'id' | 'createdAt' | 'updatedAt'>): Promise<Folder> {
+    try {
+      const docRef = await addDoc(this.getFoldersCollection(userId), {
+        ...folder,
+        userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
+      return {
+        ...folder,
+        id: docRef.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error adding folder to Firestore:', error);
+      throw error;
+    }
+  }
+
+  async updateFolder(userId: string, folderId: string, updates: Partial<Omit<Folder, 'id' | 'createdAt'>>): Promise<Folder | null> {
+    try {
+      const folderRef = doc(this.getFoldersCollection(userId), folderId);
+      const folderDoc = await getDoc(folderRef);
+      
+      if (!folderDoc.exists()) {
+        return null;
+      }
+
+      await updateDoc(folderRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+
+      return {
+        ...folderDoc.data(),
+        ...updates,
+        id: folderId
+      } as Folder;
+    } catch (error) {
+      console.error('Error updating folder in Firestore:', error);
+      throw error;
+    }
+  }
+
+  async deleteFolder(userId: string, folderId: string): Promise<boolean> {
+    try {
+      const folderRef = doc(this.getFoldersCollection(userId), folderId);
+      await deleteDoc(folderRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting folder from Firestore:', error);
+      return false;
+    }
+  }
+
+  async getFolder(userId: string, folderId: string): Promise<Folder | null> {
+    try {
+      const folderRef = doc(this.getFoldersCollection(userId), folderId);
+      const folderDoc = await getDoc(folderRef);
+      
+      if (!folderDoc.exists()) {
+        return null;
+      }
+
+      return {
+        ...folderDoc.data(),
+        id: folderId
+      } as Folder;
+    } catch (error) {
+      console.error('Error fetching folder from Firestore:', error);
+      return null;
+    }
   }
 
   async getFolderNames(userId: string): Promise<string[]> {
-    const folders = await this.getAllFolders(userId);
-    return folders.map(folder => folder.name);
+    try {
+      const folders = await this.getAllFolders(userId);
+      return folders.map(folder => folder.name);
+    } catch (error) {
+      console.error('Error fetching folder names from Firestore:', error);
+      return [];
+    }
   }
 
-  // Real-time folders subscription
-  subscribeToFolders(userId: string, callback: (folders: FirestoreFolder[]) => void) {
-    const foldersCollection = this.getFoldersCollection(userId);
-    const q = query(foldersCollection, orderBy('createdAt', 'desc'));
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const folders = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as FirestoreFolder[];
-      callback(folders);
-    });
-  }
+  // Utility methods
+  async getAvailableFolders(userId: string): Promise<{
+    folders: string[];
+    userFolders: string[];
+    aiGeneratedFolders: string[];
+  }> {
+    try {
+      // Get user-created folders
+      const userFolders = await this.getAllFolders(userId);
+      const userFolderNames = userFolders.map(folder => folder.name);
 
-  // Get all available folder names (user folders + AI-generated from tips)
-  async getAvailableFolderNames(userId: string): Promise<string[]> {
-    const [userFolders, allTips] = await Promise.all([
-      this.getAllFolders(userId),
-      this.getAllTips(userId)
-    ]);
+      // Get AI-generated folders from existing tips
+      const allTips = await this.getAllTips(userId);
+      const aiGeneratedFolders = new Set<string>();
+      
+      allTips.forEach(tip => {
+        if (tip.folder && tip.folder.trim()) {
+          aiGeneratedFolders.add(tip.folder.trim());
+        }
+      });
 
-    const userFolderNames = userFolders.map(folder => folder.name);
-    const aiGeneratedFolders = new Set<string>();
-    
-    allTips.forEach(tip => {
-      if (tip.folder && tip.folder.trim()) {
-        aiGeneratedFolders.add(tip.folder.trim());
-      }
-    });
+      // Combine and deduplicate folder names
+      const allFolderNames = [...new Set([...userFolderNames, ...Array.from(aiGeneratedFolders)])];
+      
+      // Sort alphabetically
+      allFolderNames.sort();
 
-    const allFolderNames = [...new Set([...userFolderNames, ...Array.from(aiGeneratedFolders)])];
-    allFolderNames.sort();
-    
-    return allFolderNames;
+      return {
+        folders: allFolderNames,
+        userFolders: userFolderNames,
+        aiGeneratedFolders: Array.from(aiGeneratedFolders)
+      };
+    } catch (error) {
+      console.error('Error fetching available folders from Firestore:', error);
+      return {
+        folders: [],
+        userFolders: [],
+        aiGeneratedFolders: []
+      };
+    }
   }
 }
 
+// Export a singleton instance
 export const firestoreService = new FirestoreService(); 

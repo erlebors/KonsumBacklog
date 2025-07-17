@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import UrlPreview from '@/components/UrlPreview';
 import FolderModal from '@/components/FolderModal';
+import { createAuthenticatedRequest } from '@/lib/clientAuth';
 
 interface Tip {
   id: string;
@@ -57,7 +58,7 @@ interface FolderGroup {
 interface TipSubFolder {
   name: string;
   tip: Tip;
-  isExpanded?: boolean;
+  isExpanded: boolean;
 }
 
 export default function ReviewPage() {
@@ -89,7 +90,8 @@ export default function ReviewPage() {
 
   const fetchTips = async () => {
     try {
-      const response = await fetch('/api/tips');
+      const requestOptions = await createAuthenticatedRequest('/api/tips');
+      const response = await fetch('/api/tips', requestOptions);
       if (response.ok) {
         const data = await response.json();
         setTips(data || []);
@@ -109,13 +111,15 @@ export default function ReviewPage() {
 
   const markAsProcessed = async (tipId: string) => {
     try {
-      const response = await fetch(`/api/tips/${tipId}`, {
+      const requestOptions = await createAuthenticatedRequest(`/api/tips/${tipId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ isProcessed: true }),
       });
+
+      const response = await fetch(`/api/tips/${tipId}`, requestOptions);
 
       if (response.ok) {
         setTips(tips.map(tip => 
@@ -133,9 +137,11 @@ export default function ReviewPage() {
     if (!confirm('Are you sure you want to delete this tip?')) return;
 
     try {
-      const response = await fetch(`/api/tips/${tipId}`, {
+      const requestOptions = await createAuthenticatedRequest(`/api/tips/${tipId}`, {
         method: 'DELETE',
       });
+
+      const response = await fetch(`/api/tips/${tipId}`, requestOptions);
 
       if (response.ok) {
         setTips(tips.filter(tip => tip.id !== tipId));
@@ -149,7 +155,7 @@ export default function ReviewPage() {
 
   const addContext = async (tipId: string, context: string) => {
     try {
-      const response = await fetch(`/api/tips/${tipId}`, {
+      const requestOptions = await createAuthenticatedRequest(`/api/tips/${tipId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -159,6 +165,8 @@ export default function ReviewPage() {
           needsMoreInfo: false 
         }),
       });
+
+      const response = await fetch(`/api/tips/${tipId}`, requestOptions);
 
       if (response.ok) {
         setTips(tips.map(tip => 
@@ -378,13 +386,14 @@ export default function ReviewPage() {
 
       // Update tips in the API
       for (const tip of combineData.combinedTips) {
-        await fetch(`/api/tips/${tip.id}`, {
+        const requestOptions = await createAuthenticatedRequest(`/api/tips/${tip.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ folder: newFolderName }),
         });
+        await fetch(`/api/tips/${tip.id}`, requestOptions);
       }
 
       // Update local state
@@ -428,34 +437,38 @@ export default function ReviewPage() {
               <h1 className="text-2xl font-bold text-gray-900">Review Tips</h1>
             </div>
             
-            <div className="flex space-x-2">
+            <div className="flex items-center space-x-4">
+              {/* Filter Toggle */}
+              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    filter === 'all' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilter('completed')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    filter === 'completed' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Completed
+                </button>
+              </div>
+
+              {/* Folder Management */}
               <button
                 onClick={() => setShowFolderModal(true)}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center space-x-2"
-                title="Manage custom folders"
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <Settings className="w-4 h-4" />
-                <span>Manage Folders</span>
-              </button>
-              <button
-                onClick={() => setFilter('all')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filter === 'all' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                All ({tips.filter(t => !t.isProcessed).length})
-              </button>
-              <button
-                onClick={() => setFilter('completed')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filter === 'completed' 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Completed ({tips.filter(t => t.isProcessed).length})
+                <span className="text-sm">Folders</span>
               </button>
             </div>
           </div>
@@ -487,95 +500,82 @@ export default function ReviewPage() {
                 onDrop={(e) => handleDrop(e, group.name)}
               >
                 {/* Folder Header */}
-                <div 
-                  className="px-4 py-4 border-b bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors h-[120px]"
-                  onClick={() => toggleFolder(group.name)}
-                >
-                  <div className="flex items-center justify-between h-full">
-                    <div className="flex items-center space-x-2 flex-1 min-w-0">
-                      {expandedFolders.has(group.name) ? (
-                        <ChevronDown className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                      )}
-                      <Folder className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                      <h2 className="text-base font-semibold text-gray-900 line-clamp-2 flex-1">{group.name}</h2>
-                    </div>
-                    <div className="flex items-center space-x-1 flex-shrink-0">
-                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Folder className="w-5 h-5 text-gray-500" />
+                      <h3 className="font-medium text-gray-900">{group.name}</h3>
+                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
                         {group.totalCount}
                       </span>
                     </div>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => toggleFolder(group.name)}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        {expandedFolders.has(group.name) ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-                
-                {/* Folder Content - Only show when expanded */}
+
+                {/* Folder Content */}
                 {expandedFolders.has(group.name) && (
-                  <div className="p-2 space-y-2">
+                  <div className="p-4 space-y-2">
                     {group.subFolders?.map((subFolder) => (
                       <div 
-                        key={subFolder.tip.id} 
-                        className="bg-white border border-gray-200 rounded-md overflow-hidden"
-                        data-subfolder-id={subFolder.tip.id}
-                        data-subfolder-name={subFolder.name}
+                        key={subFolder.tip.id}
+                        className="border border-gray-200 rounded-md overflow-hidden"
                       >
-                        {/* Subfolder Header - Always visible with fixed height when collapsed */}
-                        <div 
-                          className="px-3 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors h-[60px]"
-                          onClick={() => toggleSubFolder(subFolder.tip.id)}
-                        >
-                          <div className="flex items-center justify-between h-full">
-                            <div className="flex items-center space-x-2 flex-1 min-w-0">
-                              {expandedSubFolders.has(subFolder.tip.id) ? (
-                                <ChevronDown className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                              ) : (
-                                <ChevronRight className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                        {/* Subfolder Header */}
+                        <div className="p-3 bg-gray-50 border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="font-medium text-sm text-gray-900">
+                                {subFolder.name}
+                              </h4>
+                              {subFolder.tip.isProcessed && (
+                                <CheckCircle className="w-4 h-4 text-green-600" />
                               )}
-                              <h3 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">{subFolder.name}</h3>
                             </div>
-                            <div className="flex items-center space-x-1 flex-shrink-0">
-                              {(!subFolder.tip.userContext || subFolder.tip.needsMoreInfo) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedTip(subFolder.tip);
-                                    setShowContextModal(true);
-                                  }}
-                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                                  title="Add context"
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </button>
-                              )}
-                              
+                            <div className="flex items-center space-x-1">
+                              {/* Action Buttons */}
                               {!subFolder.tip.isProcessed && (
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    markAsProcessed(subFolder.tip.id);
-                                  }}
-                                  className="p-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors"
+                                  onClick={() => markAsProcessed(subFolder.tip.id)}
+                                  className="text-green-600 hover:text-green-700 transition-colors"
                                   title="Mark as processed"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                 </button>
                               )}
-                              
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteTip(subFolder.tip.id);
-                                }}
-                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                onClick={() => deleteTip(subFolder.tip.id)}
+                                className="text-red-600 hover:text-red-700 transition-colors"
                                 title="Delete tip"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                              <button
+                                onClick={() => toggleSubFolder(subFolder.tip.id)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                              >
+                                {expandedSubFolders.has(subFolder.tip.id) ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </button>
                             </div>
                           </div>
                         </div>
-                        
-                        {/* Subfolder Content - Only show when expanded */}
+
+                        {/* Subfolder Content */}
                         {expandedSubFolders.has(subFolder.tip.id) && (
                           <div className="p-4 border-t border-gray-200">
                             {subFolder.tip.summary && (
@@ -594,19 +594,15 @@ export default function ReviewPage() {
                                 </ul>
                               </div>
                             )}
-                            
+
+                            {/* URL Preview */}
                             {subFolder.tip.url && (
-                              <div className="mb-3">
+                              <div className="mb-4">
                                 <button
                                   onClick={() => toggleUrlPreview(subFolder.tip.id)}
-                                  className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 mb-2"
+                                  className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 mb-2"
                                 >
-                                  {expandedUrlPreviews.has(subFolder.tip.id) ? (
-                                    <ChevronDown className="w-4 h-4" />
-                                  ) : (
-                                    <ChevronRight className="w-4 h-4" />
-                                  )}
-                                  <span>URL Preview</span>
+                                  <span>{expandedUrlPreviews.has(subFolder.tip.id) ? 'Hide' : 'Show'} URL Preview</span>
                                 </button>
                                 {expandedUrlPreviews.has(subFolder.tip.id) && (
                                   <UrlPreview url={subFolder.tip.url} />
@@ -614,34 +610,57 @@ export default function ReviewPage() {
                               </div>
                             )}
 
-                            {subFolder.tip.userContext && (
-                              <div className="mb-3 p-2 bg-green-50 rounded-md">
-                                <div className="flex items-center space-x-1 mb-1">
-                                  <Info className="w-3 h-3 text-green-600" />
-                                  <span className="text-sm font-medium text-green-900">Context</span>
+                            {/* Tip Content */}
+                            <div className="mb-4">
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                {subFolder.tip.content}
+                              </p>
+                            </div>
+
+                            {/* Tip Metadata */}
+                            <div className="space-y-2 text-xs text-gray-500">
+                              {subFolder.tip.relevanceDate && (
+                                <div className="flex items-center space-x-1">
+                                  <Calendar className="w-3 h-3" />
+                                  <span>Relevant: {format(new Date(subFolder.tip.relevanceDate), 'MMM d, yyyy')}</span>
                                 </div>
-                                <p className="text-sm text-green-800 line-clamp-2">{subFolder.tip.userContext}</p>
+                              )}
+                              {subFolder.tip.relevanceEvent && (
+                                <div className="flex items-center space-x-1">
+                                  <Info className="w-3 h-3" />
+                                  <span>Event: {subFolder.tip.relevanceEvent}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-3 h-3" />
+                                <span>Created: {format(new Date(subFolder.tip.createdAt), 'MMM d, yyyy')}</span>
+                              </div>
+                            </div>
+
+                            {/* User Context */}
+                            {subFolder.tip.userContext && (
+                              <div className="mt-4 p-3 bg-yellow-50 rounded-md">
+                                <div className="flex items-center space-x-1 mb-1">
+                                  <Info className="w-3 h-3 text-yellow-600" />
+                                  <span className="text-sm font-medium text-yellow-900">Your Notes</span>
+                                </div>
+                                <p className="text-sm text-yellow-800">{subFolder.tip.userContext}</p>
                               </div>
                             )}
 
-                            <div className="flex items-center space-x-2 text-sm text-gray-600 mb-3">
-                              {subFolder.tip.relevanceDate && (
-                                <div className="flex items-center">
-                                  <Calendar className="w-3 h-3 mr-1" />
-                                  {format(new Date(subFolder.tip.relevanceDate), 'MMM dd')}
-                                </div>
-                              )}
-                              
-                              {subFolder.tip.relevanceEvent && (
-                                <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded-full text-xs truncate">
-                                  {subFolder.tip.relevanceEvent}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center space-x-1">
-                              
-                            </div>
+                            {/* Add Context Button */}
+                            {!subFolder.tip.userContext && (
+                              <button
+                                onClick={() => {
+                                  setSelectedTip(subFolder.tip);
+                                  setShowContextModal(true);
+                                }}
+                                className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-1"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>Add notes</span>
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -668,25 +687,18 @@ export default function ReviewPage() {
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <Plus className="w-6 h-6 transform rotate-45" />
+                <X className="w-6 h-6" />
               </button>
             </div>
-
             <div className="p-6">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  What is this tip about?
-                </label>
-                <textarea
-                  value={contextInput}
-                  onChange={(e) => setContextInput(e.target.value)}
-                  placeholder="e.g., This is regarding the roadtrip we are going on this weekend, or this is regarding a meeting I will have in two weeks..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={4}
-                />
-              </div>
-
-              <div className="flex space-x-3">
+              <textarea
+                value={contextInput}
+                onChange={(e) => setContextInput(e.target.value)}
+                placeholder="Add your notes or context about this tip..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={4}
+              />
+              <div className="flex space-x-3 mt-4">
                 <button
                   onClick={() => {
                     setShowContextModal(false);
@@ -702,20 +714,13 @@ export default function ReviewPage() {
                   disabled={!contextInput.trim()}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  Add Context
+                  Save
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Folder Modal */}
-      <FolderModal 
-        isOpen={showFolderModal}
-        onClose={() => setShowFolderModal(false)}
-        onFoldersChange={handleFoldersChange}
-      />
 
       {/* Combine Folders Modal */}
       {showCombineModal && combineData && (
@@ -734,42 +739,18 @@ export default function ReviewPage() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-
             <div className="p-6">
-              <div className="mb-4">
-                <p className="text-gray-600 mb-4">
-                  Combining <strong>{combineData.sourceFolder}</strong> and <strong>{combineData.targetFolder}</strong> 
-                  ({combineData.combinedTips.length} tips total)
-                </p>
-                
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  New folder name
-                </label>
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="Enter folder name..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                
-                <div className="mt-3 flex space-x-2">
-                  <button
-                    onClick={() => setNewFolderName(combineData.sourceFolder)}
-                    className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                  >
-                    Use &quot;{combineData.sourceFolder}&quot;
-                  </button>
-                  <button
-                    onClick={() => setNewFolderName(combineData.targetFolder)}
-                    className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                  >
-                    Use &quot;{combineData.targetFolder}&quot;
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex space-x-3">
+              <p className="text-gray-600 mb-4">
+                Combine "{combineData.sourceFolder}" and "{combineData.targetFolder}" into a new folder.
+              </p>
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="New folder name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <div className="flex space-x-3 mt-4">
                 <button
                   onClick={() => {
                     setShowCombineModal(false);
@@ -785,13 +766,51 @@ export default function ReviewPage() {
                   disabled={!newFolderName.trim()}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  Combine Folders
+                  Combine
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Folder Management Modal */}
+      {showFolderModal && (
+        <FolderModal
+          isOpen={showFolderModal}
+          onClose={() => setShowFolderModal(false)}
+          onFoldersChange={handleFoldersChange}
+        />
+      )}
     </div>
   );
-} 
+}
+
+// Helper function to generate short titles
+const generateShortTitle = (text: string): string => {
+  if (!text) return 'Untitled';
+  
+  // Clean up the text
+  const cleaned = text
+    .replace(/[^\w\s]/g, ' ') // Remove special characters
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .replace(/\s+(on my way to|while traveling to|during trip to|when going to|en route to|heading to|traveling to|going to|visiting|stopping by|passing through|driving through|flying to|taking train to|taking bus to|walking to|cycling to|sailing to|flying over|passing by|near|around|in|at|to|for|about|regarding|concerning|related to|connected to|associated with|linked to|tied to|bound to|destined for|headed for|aimed at|targeted at|focused on|centered on|based on|built on|founded on|established on|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for|geared toward|oriented toward|directed toward|pointed toward|aimed toward|targeted toward|focused toward|centered toward|based toward|built toward|founded toward|established toward|created toward|designed toward|intended toward|meant toward|planned toward|scheduled toward|booked toward|reserved toward|set toward|arranged toward|organized toward|prepared toward|ready toward|geared for|oriented for|directed for|pointed for|aimed for|targeted for|focused for|centered for|based for|built for|founded for|established for|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for)\s+/i, ' ')
+      .trim();
+
+    // Extract key words (capitalize first letter of each word)
+    const words = cleaned.split(/\s+/).filter(word => word.length > 0);
+    
+    if (words.length === 0) return 'Untitled';
+    
+    // If it's just one or two words, use as is
+    if (words.length <= 2) {
+      return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
+    
+    // Take first 3 words and capitalize them
+    const titleWords = words.slice(0, 3).map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    );
+    
+    return titleWords.join(' ');
+}; 
