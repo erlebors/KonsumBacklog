@@ -11,7 +11,6 @@ import {
   CheckCircle, 
   Trash2,
   Calendar,
-  Tag,
   Timer,
   Brain,
   Info,
@@ -23,6 +22,7 @@ import {
 import { format, isAfter, addDays } from 'date-fns';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import UrlPreview from '@/components/UrlPreview';
 
 interface Tip {
   id: string;
@@ -70,9 +70,13 @@ export default function ReviewPage() {
   const fetchTips = async () => {
     try {
       const response = await fetch('/api/tips');
+      
       if (response.ok) {
         const data = await response.json();
         setTips(data.tips || []);
+      } else {
+        console.error('API response not ok:', response.status, response.statusText);
+        toast.error('Failed to load tips');
       }
     } catch (error) {
       console.error('Error fetching tips:', error);
@@ -472,44 +476,34 @@ export default function ReviewPage() {
                                 </div>
                                 <div className="text-sm text-indigo-800 space-y-1">
                                   {(() => {
-                                    let summaryText = '';
-                                    if (typeof tip.pageSummary === 'string') {
-                                      summaryText = tip.pageSummary;
-                                    } else if (Array.isArray(tip.pageSummary)) {
-                                      summaryText = (tip.pageSummary as string[]).join('\n');
-                                    } else if (tip.pageSummary && typeof tip.pageSummary === 'object') {
-                                      summaryText = JSON.stringify(tip.pageSummary);
-                                    } else {
-                                      summaryText = String(tip.pageSummary || '');
-                                    }
-                                    
-                                    // Force split the text into bullet points
+                                    const summaryText = String(tip.pageSummary || '').trim();
                                     let bullets: string[] = [];
                                     
-                                    // Remove any existing bullet points
-                                    summaryText = summaryText.replace(/^•\s*/, '').replace(/•/g, '');
-                                    
-                                    // Try multiple splitting strategies
-                                    if (summaryText.includes(',.')) {
-                                      bullets = summaryText.split(',.').map(s => s.trim()).filter(s => s.length > 0);
-                                    } else if (summaryText.includes('.,')) {
-                                      bullets = summaryText.split('.,').map(s => s.trim()).filter(s => s.length > 0);
-                                    } else if (summaryText.match(/\.\s+[A-Z]/)) {
-                                      bullets = summaryText.split(/\.\s+(?=[A-Z])/).map(s => s.trim()).filter(s => s.length > 0);
+                                    if (summaryText.includes('•') && summaryText.includes('\n')) {
+                                      // Proper bullet points with newlines
+                                      bullets = summaryText.split('\n').map(line => line.replace(/^•\s*/, '').trim()).filter(Boolean);
+                                    } else if (summaryText.startsWith('•') && summaryText.includes(',')) {
+                                      // Single bullet with commas - split more intelligently
+                                      const parts = summaryText.replace(/^•\s*/, '').split(/,\s*(?=[A-Z][a-z])/);
+                                      bullets = parts.map(part => part.trim()).filter(part => part.length > 10);
+                                    } else if (summaryText.includes('•')) {
+                                      // Has bullet points but no newlines - split on bullet points
+                                      bullets = summaryText.split(/•\s*/).map(line => line.trim()).filter(Boolean);
                                     } else {
-                                      // Last resort: split by any period followed by space
-                                      bullets = summaryText.split(/\.\s+/).map(s => s.trim()).filter(s => s.length > 0);
+                                      // Fallback: split on sentence boundaries (periods followed by capital letters)
+                                      bullets = summaryText
+                                        .split(/\.\s+(?=[A-Z][a-z])/)
+                                        .map(s => s.trim())
+                                        .filter(s => s.length > 10)
+                                        .slice(0, 3);
                                     }
                                     
-                                    // If we still have issues, force split by commas
-                                    if (bullets.length <= 1) {
-                                      bullets = summaryText.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                                    }
-                                    
-                                    return bullets.map((bullet, index) => (
-                                      <div key={index} className="flex items-start">
-                                        <span className="mr-2 text-indigo-600 mt-0.5 flex-shrink-0">•</span>
-                                        <span className="leading-relaxed">{bullet}</span>
+                                    return bullets.map((bullet, idx) => (
+                                      <div key={idx} className="flex items-start">
+                                        <span className="mr-2 text-indigo-600 flex-shrink-0">•</span>
+                                        <span className="leading-relaxed">
+                                          {bullet.endsWith('.') ? bullet : bullet + '.'}
+                                        </span>
                                       </div>
                                     ));
                                   })()}
@@ -522,26 +516,10 @@ export default function ReviewPage() {
                               <p className="text-gray-900 mb-3">{tip.content}</p>
                             )}
                             
-                            {/* URL */}
+                            {/* URL Preview */}
                             {tip.url && (
                               <div className="mb-3">
-                                <a
-                                  href={tip.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                                  title={tip.url}
-                                >
-                                  <ExternalLink className="w-4 h-4 mr-1" />
-                                  {(() => {
-                                    try {
-                                      const url = new URL(tip.url);
-                                      return url.hostname.replace('www.', '');
-                                    } catch {
-                                      return 'Visit Link';
-                                    }
-                                  })()}
-                                </a>
+                                <UrlPreview url={tip.url} />
                               </div>
                             )}
 

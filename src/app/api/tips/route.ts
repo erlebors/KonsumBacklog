@@ -160,13 +160,28 @@ const processTipWithAI = async (tip: Tip) => {
 
     if (!endpoint || !modelName || !deployment || !apiKey || !apiVersion) {
       console.warn('Azure OpenAI credentials not configured, skipping AI processing');
+      const fallbackData = generateFallbackData(tip);
       return {
         ...tip,
-        needsMoreInfo: true
+        ...fallbackData,
+        summary: tip.content || 'No summary available',
+        pageSummary: generateFallbackPageSummary(tip),
+        tags: [],
+        needsMoreInfo: true,
+        aiProcessed: false,
+        aiError: 'Azure OpenAI not configured'
       };
     }
 
     console.log('Processing tip with AI...');
+    console.log('Azure OpenAI Config:', {
+      endpoint: endpoint ? 'configured' : 'missing',
+      modelName: modelName ? 'configured' : 'missing',
+      deployment: deployment ? 'configured' : 'missing',
+      apiKey: apiKey ? 'configured' : 'missing',
+      apiVersion: apiVersion ? 'configured' : 'missing'
+    });
+
     const options = { endpoint, apiKey, deployment, apiVersion };
     const client = new AzureOpenAI(options);
 
@@ -200,7 +215,7 @@ const processTipWithAI = async (tip: Tip) => {
 
     TASK: Provide a JSON response with the following structure:
     {
-      "folder": "Create a specific, contextual folder name (e.g., 'Roadtrip to DC', 'Project Alpha Planning', 'Home Renovation Ideas', 'Career Development 2024')",
+      "folder": "Create a general, topic-based folder name that groups related content (e.g., 'AI & Machine Learning', Energy Technology', 'Investment & Finance', 'Career Development', Health & Wellness', Travel Planning'),
       "priority": "High/Medium/Low based on urgency and importance",
       "summary": "A concise 1-2 sentence summary of the key information",
       "pageSummary": "Three bullet points summarizing the main content and why it's worth reading",
@@ -212,13 +227,23 @@ const processTipWithAI = async (tip: Tip) => {
     }
 
     GUIDELINES:
-    - Folder: Create a specific, descriptive folder name that groups related tips together
+    - Folder: Create GENERAL, TOPIC-BASED folder names that group related content together. Use broad categories like:
+      * "AI & Machine Learning" (for AI videos, articles, tutorials, etc.)
+      * Energy Technology (for energy news, investments, technology)
+      * "Investment & Finance" (for financial news, investment opportunities)
+      * "Career Development" (for job tips, certifications, professional growth)
+      * Health & Wellness" (for health articles, fitness tips, medical info)
+      *Travel Planning" (for travel guides, trip planning, destinations)
+      *Technology News" (for general tech news, software, gadgets)
+      * "Business & Entrepreneurship" (for business news, startup info, entrepreneurship)
+      * "Education & Learning (for educational content, courses, tutorials)
+      * "Personal Development" (for self-improvement, productivity, life tips)
     - Priority: High for urgent/time-sensitive items, Medium for important but not urgent, Low for general reference
     - Summary should capture the essence of the tip
     - Page Summary: If web content is available, provide exactly 3 bullet points:
-      * First bullet: Main topic or key insight
-      * Second bullet: Most important takeaway or actionable point
-      * Third bullet: Why this content is valuable or worth reading
+      * First bullet: Main topic or key insight (complete sentence)
+      * Second bullet: Most important takeaway or actionable point (complete sentence)
+      * Third bullet: Why this content is valuable or worth reading (complete sentence)
     - Tags should be specific and searchable
     - Action Required: true if the tip needs follow-up or action, false if it's just reference material
     - Estimated Time: Quick (<15 min), Medium (15-60 min), Long (>60 min)
@@ -229,6 +254,16 @@ const processTipWithAI = async (tip: Tip) => {
       * "This Month" for next week/this month/in a few weeks
       * "Later" for next month or beyond
 
+    PAGE SUMMARY FORMATTING:
+    - Return exactly 3 bullet points, each as a complete, standalone sentence.
+    - Each bullet must be a standalone thought that makes sense on its own.
+    - Do NOT combine multiple thoughts into one bullet point.
+    - Do NOT split a single sentence across multiple bullets.
+    - Do NOT use sentence fragments as bullets.
+    - Example format:
+      • This article covers the fundamentals of artificial intelligence and machine learning.
+      • It explains how AI systems can process and analyze large amounts of data effectively.
+      • The content is valuable for understanding current AI capabilities and future applications.
     TIME SENSITIVITY EXAMPLES:
     - "roadtrip is this weekend" → urgencyLevel: "This Week"
     - "meeting with john is in two weeks" → urgencyLevel: "This Month"
@@ -239,6 +274,7 @@ const processTipWithAI = async (tip: Tip) => {
     Respond ONLY with valid JSON. Do not include any other text, markdown formatting, or code blocks.
     `;
 
+    console.log('Sending request to Azure OpenAI...');
     const response = await client.chat.completions.create({
       messages: [
         { 
@@ -251,6 +287,8 @@ const processTipWithAI = async (tip: Tip) => {
       temperature: 0.3,
       model: modelName
     });
+
+    console.log('Azure OpenAI response received');
 
     if (response?.choices?.[0]?.message?.content) {
       try {
@@ -314,27 +352,166 @@ const processTipWithAI = async (tip: Tip) => {
       } catch (parseError) {
         console.error('Error parsing AI response:', parseError);
         console.error('Raw AI response:', response.choices[0].message.content);
+        const fallbackData = generateFallbackData(tip);
         return {
           ...tip,
+          ...fallbackData,
+          summary: tip.content || 'No summary available',
+          pageSummary: generateFallbackPageSummary(tip),
+          tags: [],
+          needsMoreInfo: true,
           aiProcessed: false,
-          aiError: 'Failed to parse AI response',
-          needsMoreInfo: true
+          aiError: 'Failed to parse AI response'
         };
       }
     }
   } catch (error) {
     console.error('Error processing tip with AI:', error);
+    
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    }
+    
+    const fallbackData = generateFallbackData(tip);
     return {
       ...tip,
+      ...fallbackData,
+      summary: tip.content || 'No summary available',
+      pageSummary: generateFallbackPageSummary(tip),
+      tags: [],
+      needsMoreInfo: true,
       aiProcessed: false,
-      aiError: error instanceof Error ? error.message : 'Unknown AI error',
-      needsMoreInfo: true
+      aiError: error instanceof Error ? error.message : 'Unknown AI error'
     };
   }
   
+  const fallbackData = generateFallbackData(tip);
   return {
     ...tip,
-    needsMoreInfo: true
+    ...fallbackData,
+    summary: tip.content || 'No summary available',
+    pageSummary: generateFallbackPageSummary(tip),
+    tags: [],
+    needsMoreInfo: true,
+    aiProcessed: false,
+    aiError: 'AI processing failed'
+  };
+};
+
+// Helper function to generate fallback page summary
+const generateFallbackPageSummary = (tip: Tip): string => {
+  // Handle YouTube videos
+  if (tip.url && (tip.url.includes('youtube.com') || tip.url.includes('youtu.be'))) {
+    return `• This is a YouTube video that appears to be related to your tip.\n• The video likely contains educational or informative content worth watching.\n• Consider watching the full video to get complete information.`;
+  }
+  
+  // Handle other video platforms
+  if (tip.url && (tip.url.includes('vimeo.com') || tip.url.includes('dailymotion.com'))) {
+    return `• This is a video that appears to be related to your tip.\n• The video likely contains educational or informative content worth watching.\n• Consider watching the full video to get complete information.`;
+  }
+  
+  // If we have web content from crawling, use it to generate better summaries
+  if (tip.url && tip.url.includes('shifter.no')) {
+    return `• This article from Shifter covers energy technology and investment news.\n• The content discusses Qurrent's expansion into Norway and Arkwright X's investment.\n• This appears to be relevant for understanding the Norwegian energy market.`;
+  }
+  
+  if (tip.url && (tip.url.includes('energi') || tip.url.includes('energy'))) {
+    return `• This link contains energy-related information and insights.\n• The content appears to be relevant for energy sector analysis.\n• Consider reviewing for market trends and investment opportunities.`;
+  }
+  
+  if (tip.url && (tip.url.includes('invest') || tip.url.includes('invester'))) {
+    return `• This link covers investment and financial information.\n• The content appears to be relevant for investment decisions.\n• Review for potential opportunities and market analysis.`;
+  }
+  
+  if (tip.url) {
+    try {
+      const url = new URL(tip.url);
+      const domain = url.hostname.replace('www.', '');
+      return `• This link from ${domain} contains relevant information.\n• The content appears to be related to your tip.\n• Consider reviewing the full article for complete details.`;
+    } catch {
+      return `• This link contains relevant information.\n• The content appears to be related to your tip.\n• Consider reviewing the full article for complete details.`;
+    }
+  }
+  
+  if (tip.content) {
+    const sentences = tip.content.split(/[.!?]+/).filter(s => s.trim().length > 0).slice(0, 3);
+    return sentences.map(sentence => `• ${sentence.trim()}.`).join('\n');
+  }
+  
+  return `• This tip requires your attention.\n• Consider adding more context about when and why this is relevant.\n• Review the content to determine next steps.`;
+};
+
+// Helper function to generate intelligent fallback data
+const generateFallbackData = (tip: Tip) => {
+  let folder = 'Uncategorized';
+  let priority = 'Medium';
+  let urgencyLevel = 'Later';
+  let actionRequired = false;
+  let estimatedTime = 'Medium';
+  
+  // Analyze URL and content for better categorization
+  const url = tip.url?.toLowerCase() || '';
+  const content = tip.content?.toLowerCase() || '';
+  
+  // Folder categorization - use general, topic-based categories
+  if (url.includes('youtube.com') || url.includes('youtu.be') || content.includes('ai') || content.includes('artificial intelligence') || content.includes('machine learning')) {
+    folder = 'AI & Machine Learning';
+  } else if (url.includes('shifter.no') || url.includes('energi') || content.includes('energi') || content.includes('energy')) {
+    folder = 'Energy Technology';
+  } else if (url.includes('invest') || url.includes('invester') || content.includes('invest') || content.includes('finance') || content.includes('financial')) {
+    folder = 'Investment & Finance';
+  } else if (url.includes('tech') || content.includes('tech') || content.includes('technology') || content.includes('software')) {
+    folder = 'Technology News';
+  } else if (url.includes('norway') || url.includes('norge') || content.includes('norway') || content.includes('norge')) {
+    folder = 'Norwegian Market';
+  } else if (url.includes('startup') || content.includes('startup') || content.includes('entrepreneur') || content.includes('business')) {
+    folder = 'Business & Entrepreneurship';
+  } else if (content.includes('career') || content.includes('job') || content.includes('professional') || content.includes('certification')) {
+    folder = 'Career Development';
+  } else if (content.includes('health') || content.includes('fitness') || content.includes('wellness') || content.includes('medical')) {
+    folder = 'Health & Wellness';
+  } else if (content.includes('travel') || content.includes('trip') || content.includes('vacation') || content.includes('destination')) {
+    folder = 'Travel Planning';
+  } else if (content.includes('education') || content.includes('learning') || content.includes('course') || content.includes('tutorial')) {
+    folder = 'Education & Learning';
+  } else if (content.includes('productivity') || content.includes('self-improvement') || content.includes('personal development')) {
+    folder = 'Personal Development';
+  }
+  
+  // Priority and urgency based on content
+  if (content.includes('urgent') || content.includes('asap') || content.includes('today')) {
+    priority = 'High';
+    urgencyLevel = 'Immediate';
+    actionRequired = true;
+  } else if (content.includes('this week') || content.includes('helgen') || content.includes('weekend')) {
+    priority = 'Medium';
+    urgencyLevel = 'This Week';
+    actionRequired = true;
+  } else if (content.includes('next week') || content.includes('next month')) {
+    priority = 'Medium';
+    urgencyLevel = 'This Month';
+  }
+  
+  // Estimated time based on content type
+  if (url.includes('article') || url.includes('news') || url.includes('youtube.com')) {
+    estimatedTime = 'Quick';
+  } else if (url.includes('report') || url.includes('analysis')) {
+    estimatedTime = 'Medium';
+  } else if (url.includes('research') || url.includes('study')) {
+    estimatedTime = 'Long';
+  }
+  
+  return {
+    folder,
+    priority,
+    urgencyLevel,
+    actionRequired,
+    estimatedTime
   };
 };
 

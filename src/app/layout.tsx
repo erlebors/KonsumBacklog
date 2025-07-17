@@ -17,20 +17,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tip Organizer",
   description: "Organize your tips, links, and useful information with AI",
-  icons: {
-    icon: [
-      {
-        url: '/favicon.ico',
-        sizes: 'any',
-      },
-      {
-        url: '/icon.png',
-        sizes: '32x32',
-        type: 'image/png',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
 };
 
 export default function RootLayout({
