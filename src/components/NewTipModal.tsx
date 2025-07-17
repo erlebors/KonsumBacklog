@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { X, FileText, Brain, Folder } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, FileText, Brain, Folder, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface NewTipModalProps {
@@ -18,10 +18,32 @@ interface TipPreview {
 
 export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
   const [content, setContent] = useState('');
+  const [selectedFolder, setSelectedFolder] = useState('');
+  const [availableFolders, setAvailableFolders] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiProcessing, setAiProcessing] = useState(false);
   const [tipPreviews, setTipPreviews] = useState<TipPreview[]>([]);
   const [showPreviews, setShowPreviews] = useState(false);
+  const [showFolderDropdown, setShowFolderDropdown] = useState(false);
+
+  // Fetch available folders when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchAvailableFolders();
+    }
+  }, [isOpen]);
+
+  const fetchAvailableFolders = async () => {
+    try {
+      const response = await fetch('/api/folders/available');
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableFolders(data.folders || []);
+      }
+    } catch (error) {
+      console.error('Error fetching available folders:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +59,7 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
     try {
       const tipData = {
         content: content.trim(),
+        selectedFolder: selectedFolder.trim() || undefined,
         createdAt: new Date().toISOString(),
       };
 
@@ -89,6 +112,7 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
         },
         body: JSON.stringify({
           content: content.trim(),
+          selectedFolder: selectedFolder.trim() || undefined,
         }),
       });
 
@@ -107,9 +131,11 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
 
   const handleClose = () => {
     setContent('');
+    setSelectedFolder('');
     setAiProcessing(false);
     setTipPreviews([]);
     setShowPreviews(false);
+    setShowFolderDropdown(false);
     onClose();
   };
 
@@ -143,6 +169,57 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
             />
             <p className="text-xs text-gray-500 mt-1">
               Tip: You can include multiple items (text or URLs) separated by commas, &quot;and&quot;, or &quot;or&quot;. Each will be created as a separate tip in the same folder.
+            </p>
+          </div>
+
+          {/* Folder Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Folder className="w-4 h-4 inline mr-1" />
+              Choose Folder (Optional)
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowFolderDropdown(!showFolderDropdown)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-left flex items-center justify-between"
+              >
+                <span className={selectedFolder ? 'text-gray-900' : 'text-gray-500'}>
+                  {selectedFolder || 'Let AI choose the best folder'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showFolderDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showFolderDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedFolder('');
+                      setShowFolderDropdown(false);
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-100 text-gray-700 border-b border-gray-200"
+                  >
+                    Let AI choose the best folder
+                  </button>
+                  {availableFolders.map((folder) => (
+                    <button
+                      key={folder}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFolder(folder);
+                        setShowFolderDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-100 text-gray-900"
+                    >
+                      {folder}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Choose a specific folder or let AI automatically categorize your tips.
             </p>
           </div>
 

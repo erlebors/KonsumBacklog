@@ -8,11 +8,24 @@ const openai = new OpenAI({
 
 export async function POST(request: NextRequest) {
   try {
-    const { content } = await request.json();
+    const { content, selectedFolder } = await request.json();
 
     // If no content, return empty array
     if (!content.trim()) {
       return NextResponse.json({ tips: [] });
+    }
+
+    // If a folder is selected, use it directly without AI categorization
+    if (selectedFolder && selectedFolder.trim()) {
+      const items = content.split(/[,\n]+/).map((item: string) => item.trim()).filter((item: string) => item);
+      const tips = items.map((item: string) => ({
+        content: item,
+        title: item.substring(0, 30) + (item.length > 30 ? '...' : ''),
+        category: selectedFolder,
+        url: ''
+      }));
+      
+      return NextResponse.json({ tips });
     }
 
     // Get custom folder names for AI categorization

@@ -20,10 +20,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { content } = await request.json();
+    const { content, selectedFolder } = await request.json();
 
     // Parse multiple tips from content
-    const tips = await parseMultipleTips(content);
+    const tips = await parseMultipleTips(content, selectedFolder);
 
     // Save all tips
     const savedTips = [];
@@ -43,10 +43,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function parseMultipleTips(content: string): Promise<Tip[]> {
+async function parseMultipleTips(content: string, selectedFolder?: string): Promise<Tip[]> {
   // If no content, return empty array
   if (!content.trim()) {
     return [];
+  }
+
+  // If a folder is selected, use it directly without AI categorization
+  if (selectedFolder && selectedFolder.trim()) {
+    const tips: Tip[] = [];
+    const items = content.split(/[,\n]+/).map(item => item.trim()).filter(item => item);
+    
+    for (const item of items) {
+      const tip = await processSingleTip(item, '', selectedFolder);
+      tips.push(tip);
+    }
+    
+    return tips;
   }
 
   // Get custom folder names for AI categorization
@@ -151,7 +164,7 @@ Guidelines:
   return tips;
 }
 
-async function processSingleTip(content: string, url?: string): Promise<Tip> {
+async function processSingleTip(content: string, url?: string, folder?: string): Promise<Tip> {
   let pageContent = '';
   let pageTitle = '';
 
@@ -264,7 +277,7 @@ Focus on using existing custom folders when the content fits well, or creating m
     relevanceDate: null,
     relevanceEvent: null,
     createdAt: new Date().toISOString(),
-    folder: parsedResponse.category || 'General Tips',
+    folder: folder || parsedResponse.category || 'General Tips',
     priority: parsedResponse.priority?.toString() || '5',
     summary: parsedResponse.pageSummary || '• Tip saved for future reference\n• Content requires manual review\n• Consider organizing into relevant category',
     tags: [],
