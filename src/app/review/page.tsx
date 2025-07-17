@@ -15,7 +15,8 @@ import {
   Info,
   ChevronDown,
   ChevronRight,
-  Settings
+  Settings,
+  X
 } from 'lucide-react';
 import { format, isAfter, addDays } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -71,6 +72,17 @@ export default function ReviewPage() {
   const [expandedSubFolders, setExpandedSubFolders] = useState<Set<string>>(new Set());
   const [expandedUrlPreviews, setExpandedUrlPreviews] = useState<Set<string>>(new Set());
   const [showFolderModal, setShowFolderModal] = useState(false);
+  
+  // Drag and drop state
+  const [draggedFolder, setDraggedFolder] = useState<string | null>(null);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+  const [showCombineModal, setShowCombineModal] = useState(false);
+  const [combineData, setCombineData] = useState<{
+    sourceFolder: string;
+    targetFolder: string;
+    combinedTips: Tip[];
+  } | null>(null);
+  const [newFolderName, setNewFolderName] = useState('');
 
   useEffect(() => {
     fetchTips();
@@ -226,17 +238,17 @@ export default function ReviewPage() {
         let subFolderName = 'Untitled';
         
         if (tip.title) {
-          subFolderName = tip.title;
+          subFolderName = generateShortTitle(tip.title);
         } else if (tip.url) {
           // Try to extract title from URL or use domain
           try {
             const url = new URL(tip.url);
             subFolderName = url.hostname.replace('www.', '');
           } catch {
-            subFolderName = tip.content.substring(0, 30) + (tip.content.length > 30 ? '...' : '');
+            subFolderName = generateShortTitle(tip.content);
           }
         } else if (tip.content) {
-          subFolderName = tip.content.substring(0, 30) + (tip.content.length > 30 ? '...' : '');
+          subFolderName = generateShortTitle(tip.content);
         }
         
         return {
@@ -393,6 +405,125 @@ export default function ReviewPage() {
     setExpandedUrlPreviews(newExpandedUrlPreviews);
   };
 
+  // Helper function to generate shorter, more concise titles
+  const generateShortTitle = (text: string): string => {
+    if (!text) return 'Untitled';
+    
+    // Remove common prefixes and phrases
+    const cleaned = text
+      .toLowerCase()
+      .replace(/^(visit|go to|check out|see|explore|look at|read about|learn about|research|find|get|buy|order|book|schedule|plan|prepare for|work on|study|review|analyze|investigate|examine|consider|think about|remember to|don't forget to|make sure to|try to|attempt to|start|begin|continue|finish|complete|do|work on|focus on|concentrate on|spend time on|dedicate time to|allocate time for|set aside time for|make time for|find time for|take time to|spend time|invest time in|put time into|devote time to|commit time to|allocate|dedicate|devote|commit|invest|put|take|make|find|set|spend|focus|concentrate|work|start|begin|continue|finish|complete|do|try|attempt|remember|don't forget|make sure|think|consider|examine|investigate|analyze|review|study|plan|prepare|schedule|book|order|buy|get|find|research|learn|read|see|explore|look|check|go|visit)\s+/i, '')
+      .replace(/\s+(on my way to|while traveling to|during trip to|when going to|en route to|heading to|traveling to|going to|visiting|stopping by|passing through|driving through|flying to|taking train to|taking bus to|walking to|cycling to|sailing to|flying over|passing by|near|around|in|at|to|for|about|regarding|concerning|related to|connected to|associated with|linked to|tied to|bound to|destined for|headed for|aimed at|targeted at|focused on|centered on|based on|built on|founded on|established on|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for|geared toward|oriented toward|directed toward|pointed toward|aimed toward|targeted toward|focused toward|centered toward|based toward|built toward|founded toward|established toward|created toward|designed toward|intended toward|meant toward|planned toward|scheduled toward|booked toward|reserved toward|set toward|arranged toward|organized toward|prepared toward|ready toward|geared for|oriented for|directed for|pointed for|aimed for|targeted for|focused for|centered for|based for|built for|founded for|established for|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for)\s+/i, ' ')
+      .trim();
+
+    // Extract key words (capitalize first letter of each word)
+    const words = cleaned.split(/\s+/).filter(word => word.length > 0);
+    
+    if (words.length === 0) return 'Untitled';
+    
+    // If it's just one or two words, use as is
+    if (words.length <= 2) {
+      return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
+    
+    // For longer phrases, try to extract the most important part
+    // Look for location names, proper nouns, or key concepts
+    const importantWords = words.filter(word => 
+      word.length > 2 && 
+      !['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'down', 'out', 'off', 'over', 'under', 'through', 'during', 'before', 'after', 'while', 'since', 'until', 'unless', 'although', 'because', 'if', 'when', 'where', 'why', 'how', 'what', 'which', 'who', 'whom', 'whose', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'a', 'an'].includes(word)
+    );
+    
+    if (importantWords.length > 0) {
+      // Take up to 3 important words
+      const selectedWords = importantWords.slice(0, 3);
+      return selectedWords.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
+    
+    // Fallback: take first 2-3 words and capitalize
+    const selectedWords = words.slice(0, Math.min(3, words.length));
+    return selectedWords.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, folderName: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedFolder(folderName);
+  };
+
+  const handleDragOver = (e: React.DragEvent, folderName: string) => {
+    e.preventDefault();
+    if (draggedFolder && draggedFolder !== folderName) {
+      setDragOverFolder(folderName);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverFolder(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetFolder: string) => {
+    e.preventDefault();
+    
+    if (!draggedFolder || draggedFolder === targetFolder) {
+      setDraggedFolder(null);
+      setDragOverFolder(null);
+      return;
+    }
+
+    // Get all tips from both folders
+    const sourceTips = tips.filter(tip => tip.folder === draggedFolder);
+    const targetTips = tips.filter(tip => tip.folder === targetFolder);
+    const combinedTips = [...sourceTips, ...targetTips];
+
+    // Set up combine modal data
+    setCombineData({
+      sourceFolder: draggedFolder,
+      targetFolder: targetFolder,
+      combinedTips: combinedTips
+    });
+    setNewFolderName(targetFolder); // Default to target folder name
+    setShowCombineModal(true);
+
+    setDraggedFolder(null);
+    setDragOverFolder(null);
+  };
+
+  const handleCombineFolders = async () => {
+    if (!combineData || !newFolderName.trim()) return;
+
+    try {
+      // Update all tips to use the new folder name
+      const updatedTips = tips.map(tip => {
+        if (tip.folder === combineData.sourceFolder || tip.folder === combineData.targetFolder) {
+          return { ...tip, folder: newFolderName };
+        }
+        return tip;
+      });
+
+      // Update tips in the API
+      for (const tip of combineData.combinedTips) {
+        await fetch(`/api/tips/${tip.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ folder: newFolderName }),
+        });
+      }
+
+      // Update local state
+      setTips(updatedTips);
+      toast.success(`Folders combined into "${newFolderName}"`);
+      setShowCombineModal(false);
+      setCombineData(null);
+      setNewFolderName('');
+    } catch (error) {
+      console.error('Error combining folders:', error);
+      toast.error('Failed to combine folders');
+    }
+  };
+
   const folderGroups = organizeByFolder(getFilteredTips());
 
   if (loading) {
@@ -487,7 +618,19 @@ export default function ReviewPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {folderGroups.map((group) => (
-              <div key={group.name} className={`bg-white rounded-lg shadow-sm border ${expandedFolders.has(group.name) ? '' : 'h-[120px]'}`}>
+              <div 
+                key={group.name} 
+                className={`bg-white rounded-lg shadow-sm border ${expandedFolders.has(group.name) ? '' : 'h-[120px]'} ${
+                  draggedFolder === group.name ? 'opacity-50' : ''
+                } ${
+                  dragOverFolder === group.name ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                }`}
+                draggable
+                onDragStart={(e) => handleDragStart(e, group.name)}
+                onDragOver={(e) => handleDragOver(e, group.name)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, group.name)}
+              >
                 {/* Folder Header */}
                 <div 
                   className="px-4 py-4 border-b bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors h-[120px]"
@@ -724,6 +867,82 @@ export default function ReviewPage() {
         onClose={() => setShowFolderModal(false)}
         onFoldersChange={handleFoldersChange}
       />
+
+      {/* Combine Folders Modal */}
+      {showCombineModal && combineData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-semibold text-gray-900">Combine Folders</h2>
+              <button
+                onClick={() => {
+                  setShowCombineModal(false);
+                  setCombineData(null);
+                  setNewFolderName('');
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-gray-600 mb-4">
+                  Combining <strong>{combineData.sourceFolder}</strong> and <strong>{combineData.targetFolder}</strong> 
+                  ({combineData.combinedTips.length} tips total)
+                </p>
+                
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New folder name
+                </label>
+                <input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="Enter folder name..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                
+                <div className="mt-3 flex space-x-2">
+                  <button
+                    onClick={() => setNewFolderName(combineData.sourceFolder)}
+                    className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  >
+                    Use &quot;{combineData.sourceFolder}&quot;
+                  </button>
+                  <button
+                    onClick={() => setNewFolderName(combineData.targetFolder)}
+                    className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  >
+                    Use &quot;{combineData.targetFolder}&quot;
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowCombineModal(false);
+                    setCombineData(null);
+                    setNewFolderName('');
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCombineFolders}
+                  disabled={!newFolderName.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Combine Folders
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
