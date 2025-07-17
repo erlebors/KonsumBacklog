@@ -1,569 +1,311 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AzureOpenAI } from 'openai';
+import OpenAI from 'openai';
 import { tipsService, Tip } from '@/lib/tipsService';
-import { WebCrawler } from '@/lib/webCrawler';
+import { foldersService } from '@/lib/foldersService';
+import { crawlWebPage } from '@/lib/webCrawler';
 
-// Function to extract JSON from AI response
-const extractJSONFromResponse = (response: string): Record<string, unknown> => {
-  try {
-    // First, try to parse as direct JSON
-    return JSON.parse(response);
-  } catch {
-    // If that fails, try to extract JSON from markdown code blocks
-    const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[1]);
-      } catch (parseError) {
-        console.error('Error parsing JSON from markdown:', parseError);
-        throw parseError;
-      }
-    }
-    
-    // If no markdown blocks, try to find JSON object in the text
-    const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
-    if (jsonObjectMatch) {
-      try {
-        return JSON.parse(jsonObjectMatch[0]);
-      } catch (parseError) {
-        console.error('Error parsing JSON object from text:', parseError);
-        throw parseError;
-      }
-    }
-    
-    throw new Error('No valid JSON found in response');
-  }
-};
-
-// Function to parse relative dates from natural language
-const parseRelativeDate = (text: string): string | null => {
-  const today = new Date();
-  const lowerText = text.toLowerCase();
-  
-  // Common relative date patterns
-  const patterns = [
-    { 
-      pattern: /this weekend/, 
-      extract: () => {
-        // Calculate this weekend (next Saturday)
-        const currentDay = today.getDay(); // 0 = Sunday, 6 = Saturday
-        const daysUntilSaturday = (6 - currentDay + 7) % 7;
-        const daysToAdd = daysUntilSaturday === 0 ? 7 : daysUntilSaturday; // If today is Saturday, go to next Saturday
-        const resultDate = new Date(today);
-        resultDate.setDate(today.getDate() + daysToAdd);
-        return resultDate.toISOString().split('T')[0];
-      }
-    },
-    { 
-      pattern: /next weekend/, 
-      extract: () => {
-        // Calculate next weekend (Saturday after this weekend)
-        const currentDay = today.getDay();
-        const daysUntilSaturday = (6 - currentDay + 7) % 7;
-        const daysToAdd = daysUntilSaturday + 7; // Add 7 more days for next weekend
-        const resultDate = new Date(today);
-        resultDate.setDate(today.getDate() + daysToAdd);
-        return resultDate.toISOString().split('T')[0];
-      }
-    },
-    { pattern: /next week/, extract: () => {
-      const resultDate = new Date(today);
-      resultDate.setDate(today.getDate() + 7);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /in (\d+) days?/, extract: (match: RegExpMatchArray) => {
-      const days = parseInt(match[1]);
-      const resultDate = new Date(today);
-      resultDate.setDate(today.getDate() + days);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /in (\d+) weeks?/, extract: (match: RegExpMatchArray) => {
-      const weeks = parseInt(match[1]);
-      const resultDate = new Date(today);
-      resultDate.setDate(today.getDate() + (weeks * 7));
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /in (\d+) months?/, extract: (match: RegExpMatchArray) => {
-      const months = parseInt(match[1]);
-      const resultDate = new Date(today);
-      resultDate.setMonth(today.getMonth() + months);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /tomorrow/, extract: () => {
-      const resultDate = new Date(today);
-      resultDate.setDate(today.getDate() + 1);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /today/, extract: () => {
-      return today.toISOString().split('T')[0];
-    }},
-    { pattern: /next month/, extract: () => {
-      const resultDate = new Date(today);
-      resultDate.setMonth(today.getMonth() + 1);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /next year/, extract: () => {
-      const resultDate = new Date(today);
-      resultDate.setFullYear(today.getFullYear() + 1);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /asap|urgent|immediately/, extract: () => {
-      return today.toISOString().split('T')[0];
-    }},
-    { pattern: /soon/, extract: () => {
-      const resultDate = new Date(today);
-      resultDate.setDate(today.getDate() + 3);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /later/, extract: () => {
-      const resultDate = new Date(today);
-      resultDate.setDate(today.getDate() + 14);
-      return resultDate.toISOString().split('T')[0];
-    }},
-    { pattern: /next (\w+)/, extract: (match: RegExpMatchArray) => {
-      const day = match[1];
-      const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-      const targetDay = daysOfWeek.indexOf(day);
-      if (targetDay !== -1) {
-        const currentDay = today.getDay();
-        const daysUntil = (targetDay - currentDay + 7) % 7;
-        const daysToAdd = daysUntil === 0 ? 7 : daysUntil;
-        const resultDate = new Date(today);
-        resultDate.setDate(today.getDate() + daysToAdd);
-        return resultDate.toISOString().split('T')[0];
-      }
-      return null;
-    }}
-  ];
-
-  for (const pattern of patterns) {
-    const match = lowerText.match(pattern.pattern);
-    if (match) {
-      const extractedDate = pattern.extract(match);
-      if (extractedDate) {
-        return extractedDate;
-      }
-    }
-  }
-  
-  return null;
-};
-
-// AI processing function
-const processTipWithAI = async (tip: Tip) => {
-  try {
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-    const modelName = process.env.AZURE_OPENAI_MODEL_NAME;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    const apiVersion = process.env.AZURE_OPENAI_API_VERSION;
-
-    if (!endpoint || !modelName || !deployment || !apiKey || !apiVersion) {
-      console.warn('Azure OpenAI credentials not configured, skipping AI processing');
-      const fallbackData = generateFallbackData(tip);
-      return {
-        ...tip,
-        ...fallbackData,
-        summary: tip.content || 'No summary available',
-        pageSummary: generateFallbackPageSummary(tip),
-        tags: [],
-        needsMoreInfo: true,
-        aiProcessed: false,
-        aiError: 'Azure OpenAI not configured'
-      };
-    }
-
-    console.log('Processing tip with AI...');
-    console.log('Azure OpenAI Config:', {
-      endpoint: endpoint ? 'configured' : 'missing',
-      modelName: modelName ? 'configured' : 'missing',
-      deployment: deployment ? 'configured' : 'missing',
-      apiKey: apiKey ? 'configured' : 'missing',
-      apiVersion: apiVersion ? 'configured' : 'missing'
-    });
-
-    const options = { endpoint, apiKey, deployment, apiVersion };
-    const client = new AzureOpenAI(options);
-
-    // Crawl web page if URL is provided
-    let webContent = null;
-    if (tip.url && tip.url.trim() !== '') {
-      try {
-        console.log('Crawling web page for content...');
-        webContent = await WebCrawler.extractContent(tip.url);
-        console.log('Web crawling completed:', webContent.title);
-      } catch (crawlError) {
-        console.warn('Failed to crawl web page:', crawlError);
-      }
-    }
-
-    const prompt = `
-    You are an expert information organizer and content summarizer. Analyze this tip and provide structured information to help organize it effectively.
-
-    TIP INFORMATION:
-    Content: ${tip.content || 'N/A'}
-    URL: ${tip.url || 'N/A'}
-    Relevance Date: ${tip.relevanceDate || 'N/A'}
-    Relevance Event: ${tip.relevanceEvent || 'N/A'}
-
-    ${webContent ? `
-    WEB PAGE CONTENT:
-    Title: ${webContent.title}
-    Description: ${webContent.description}
-    Content: ${webContent.content.substring(0, 3000)}
-    ` : ''}
-
-    TASK: Provide a JSON response with the following structure:
-    {
-      "folder": "Create a general, topic-based folder name that groups related content (e.g., 'AI & Machine Learning', Energy Technology', 'Investment & Finance', 'Career Development', Health & Wellness', Travel Planning'),
-      "priority": "High/Medium/Low based on urgency and importance",
-      "summary": "A concise 1-2 sentence summary of the key information",
-      "pageSummary": "Three bullet points summarizing the main content and why it's worth reading",
-      "tags": ["3-5", "relevant", "tags", "for", "searching"],
-      "actionRequired": "true/false - whether this tip requires any action",
-      "estimatedTime": "Quick/Medium/Long - estimated time to process this tip",
-      "needsMoreInfo": "true/false - whether this tip needs additional context from the user to be properly organized",
-      "urgencyLevel": "Immediate/This Week/This Month/Later - based on time sensitivity"
-    }
-
-    GUIDELINES:
-    - Folder: Create GENERAL, TOPIC-BASED folder names that group related content together. Use broad categories like:
-      * "AI & Machine Learning" (for AI videos, articles, tutorials, etc.)
-      * Energy Technology (for energy news, investments, technology)
-      * "Investment & Finance" (for financial news, investment opportunities)
-      * "Career Development" (for job tips, certifications, professional growth)
-      * Health & Wellness" (for health articles, fitness tips, medical info)
-      *Travel Planning" (for travel guides, trip planning, destinations)
-      *Technology News" (for general tech news, software, gadgets)
-      * "Business & Entrepreneurship" (for business news, startup info, entrepreneurship)
-      * "Education & Learning (for educational content, courses, tutorials)
-      * "Personal Development" (for self-improvement, productivity, life tips)
-    - Priority: High for urgent/time-sensitive items, Medium for important but not urgent, Low for general reference
-    - Summary should capture the essence of the tip
-    - Page Summary: If web content is available, provide exactly 3 bullet points:
-      * First bullet: Main topic or key insight (complete sentence)
-      * Second bullet: Most important takeaway or actionable point (complete sentence)
-      * Third bullet: Why this content is valuable or worth reading (complete sentence)
-    - Tags should be specific and searchable
-    - Action Required: true if the tip needs follow-up or action, false if it's just reference material
-    - Estimated Time: Quick (<15 min), Medium (15-60 min), Long (>60 min)
-    - Needs More Info: true if the tip lacks context about when/why it's relevant, false if it's self-contained
-    - Urgency Level: 
-      * "Immediate" for today/tomorrow/ASAP/urgent
-      * "This Week" for this week/next few days/this weekend
-      * "This Month" for next week/this month/in a few weeks
-      * "Later" for next month or beyond
-
-    PAGE SUMMARY FORMATTING:
-    - Return exactly 3 bullet points, each as a complete, standalone sentence.
-    - Each bullet must be a standalone thought that makes sense on its own.
-    - Do NOT combine multiple thoughts into one bullet point.
-    - Do NOT split a single sentence across multiple bullets.
-    - Do NOT use sentence fragments as bullets.
-    - Example format:
-      • This article covers the fundamentals of artificial intelligence and machine learning.
-      • It explains how AI systems can process and analyze large amounts of data effectively.
-      • The content is valuable for understanding current AI capabilities and future applications.
-    TIME SENSITIVITY EXAMPLES:
-    - "roadtrip is this weekend" → urgencyLevel: "This Week"
-    - "meeting with john is in two weeks" → urgencyLevel: "This Month"
-    - "deadline is next Friday" → urgencyLevel: "This Week"
-    - "urgent task" → urgencyLevel: "Immediate"
-    - "planning for next month" → urgencyLevel: "Later"
-
-    Respond ONLY with valid JSON. Do not include any other text, markdown formatting, or code blocks.
-    `;
-
-    console.log('Sending request to Azure OpenAI...');
-    const response = await client.chat.completions.create({
-      messages: [
-        { 
-          role: "system", 
-          content: "You are a helpful assistant that categorizes and organizes information. You always respond with valid JSON only. Never include explanations, markdown formatting, or additional text outside the JSON structure." 
-        },
-        { role: "user", content: prompt }
-      ],
-      max_tokens: 1000,
-      temperature: 0.3,
-      model: modelName
-    });
-
-    console.log('Azure OpenAI response received');
-
-    if (response?.choices?.[0]?.message?.content) {
-      try {
-        const aiAnalysis = extractJSONFromResponse(response.choices[0].message.content) as {
-          folder?: string;
-          priority?: string;
-          summary?: string;
-          pageSummary?: string;
-          tags?: string[];
-          actionRequired?: boolean;
-          estimatedTime?: string;
-          needsMoreInfo?: boolean;
-          urgencyLevel?: string;
-        };
-        console.log('AI Analysis:', aiAnalysis);
-        
-        // Parse relative dates from content using our local function
-        let finalDate = tip.relevanceDate;
-        if (!finalDate && tip.content) {
-          finalDate = parseRelativeDate(tip.content);
-        }
-        
-        return {
-          ...tip,
-          folder: aiAnalysis.folder || 'Uncategorized',
-          priority: aiAnalysis.priority || 'Medium',
-          summary: aiAnalysis.summary || '',
-          pageSummary: (() => {
-            // Ensure pageSummary is always a properly formatted string
-            let pageSummary = aiAnalysis.pageSummary || '';
-            
-            if (typeof pageSummary === 'string') {
-              // If it's already a string, ensure it has proper bullet point formatting
-              if (!pageSummary.includes('•') && !pageSummary.includes('*')) {
-                // Split by newlines and add bullet points if they don't exist
-                const lines = pageSummary.split('\n').filter(line => line.trim().length > 0);
-                pageSummary = lines.map(line => `• ${line.trim()}`).join('\n');
-              }
-            } else {
-              // For any other type, convert to string and format
-              const summaryStr = String(pageSummary || '');
-              if (summaryStr.trim()) {
-                const lines = summaryStr.split('\n').filter(line => line.trim().length > 0);
-                pageSummary = lines.map(line => `• ${line.trim()}`).join('\n');
-              } else {
-                pageSummary = '';
-              }
-            }
-            
-            return pageSummary;
-          })(),
-          tags: aiAnalysis.tags || [],
-          actionRequired: aiAnalysis.actionRequired || false,
-          estimatedTime: aiAnalysis.estimatedTime || 'Medium',
-          needsMoreInfo: aiAnalysis.needsMoreInfo || true,
-          relevanceDate: finalDate,
-          urgencyLevel: aiAnalysis.urgencyLevel || 'Later',
-          aiProcessed: true,
-          aiProcessedAt: new Date().toISOString()
-        };
-      } catch (parseError) {
-        console.error('Error parsing AI response:', parseError);
-        console.error('Raw AI response:', response.choices[0].message.content);
-        const fallbackData = generateFallbackData(tip);
-        return {
-          ...tip,
-          ...fallbackData,
-          summary: tip.content || 'No summary available',
-          pageSummary: generateFallbackPageSummary(tip),
-          tags: [],
-          needsMoreInfo: true,
-          aiProcessed: false,
-          aiError: 'Failed to parse AI response'
-        };
-      }
-    }
-  } catch (error) {
-    console.error('Error processing tip with AI:', error);
-    
-    // Log more details about the error
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-    }
-    
-    const fallbackData = generateFallbackData(tip);
-    return {
-      ...tip,
-      ...fallbackData,
-      summary: tip.content || 'No summary available',
-      pageSummary: generateFallbackPageSummary(tip),
-      tags: [],
-      needsMoreInfo: true,
-      aiProcessed: false,
-      aiError: error instanceof Error ? error.message : 'Unknown AI error'
-    };
-  }
-  
-  const fallbackData = generateFallbackData(tip);
-  return {
-    ...tip,
-    ...fallbackData,
-    summary: tip.content || 'No summary available',
-    pageSummary: generateFallbackPageSummary(tip),
-    tags: [],
-    needsMoreInfo: true,
-    aiProcessed: false,
-    aiError: 'AI processing failed'
-  };
-};
-
-// Helper function to generate fallback page summary
-const generateFallbackPageSummary = (tip: Tip): string => {
-  // Handle YouTube videos
-  if (tip.url && (tip.url.includes('youtube.com') || tip.url.includes('youtu.be'))) {
-    return `• This is a YouTube video that appears to be related to your tip.\n• The video likely contains educational or informative content worth watching.\n• Consider watching the full video to get complete information.`;
-  }
-  
-  // Handle other video platforms
-  if (tip.url && (tip.url.includes('vimeo.com') || tip.url.includes('dailymotion.com'))) {
-    return `• This is a video that appears to be related to your tip.\n• The video likely contains educational or informative content worth watching.\n• Consider watching the full video to get complete information.`;
-  }
-  
-  // If we have web content from crawling, use it to generate better summaries
-  if (tip.url && tip.url.includes('shifter.no')) {
-    return `• This article from Shifter covers energy technology and investment news.\n• The content discusses Qurrent's expansion into Norway and Arkwright X's investment.\n• This appears to be relevant for understanding the Norwegian energy market.`;
-  }
-  
-  if (tip.url && (tip.url.includes('energi') || tip.url.includes('energy'))) {
-    return `• This link contains energy-related information and insights.\n• The content appears to be relevant for energy sector analysis.\n• Consider reviewing for market trends and investment opportunities.`;
-  }
-  
-  if (tip.url && (tip.url.includes('invest') || tip.url.includes('invester'))) {
-    return `• This link covers investment and financial information.\n• The content appears to be relevant for investment decisions.\n• Review for potential opportunities and market analysis.`;
-  }
-  
-  if (tip.url) {
-    try {
-      const url = new URL(tip.url);
-      const domain = url.hostname.replace('www.', '');
-      return `• This link from ${domain} contains relevant information.\n• The content appears to be related to your tip.\n• Consider reviewing the full article for complete details.`;
-    } catch {
-      return `• This link contains relevant information.\n• The content appears to be related to your tip.\n• Consider reviewing the full article for complete details.`;
-    }
-  }
-  
-  if (tip.content) {
-    const sentences = tip.content.split(/[.!?]+/).filter(s => s.trim().length > 0).slice(0, 3);
-    return sentences.map(sentence => `• ${sentence.trim()}.`).join('\n');
-  }
-  
-  return `• This tip requires your attention.\n• Consider adding more context about when and why this is relevant.\n• Review the content to determine next steps.`;
-};
-
-// Helper function to generate intelligent fallback data
-const generateFallbackData = (tip: Tip) => {
-  let folder = 'Uncategorized';
-  let priority = 'Medium';
-  let urgencyLevel = 'Later';
-  let actionRequired = false;
-  let estimatedTime = 'Medium';
-  
-  // Analyze URL and content for better categorization
-  const url = tip.url?.toLowerCase() || '';
-  const content = tip.content?.toLowerCase() || '';
-  
-  // Folder categorization - use general, topic-based categories
-  if (url.includes('youtube.com') || url.includes('youtu.be') || content.includes('ai') || content.includes('artificial intelligence') || content.includes('machine learning')) {
-    folder = 'AI & Machine Learning';
-  } else if (url.includes('shifter.no') || url.includes('energi') || content.includes('energi') || content.includes('energy')) {
-    folder = 'Energy Technology';
-  } else if (url.includes('invest') || url.includes('invester') || content.includes('invest') || content.includes('finance') || content.includes('financial')) {
-    folder = 'Investment & Finance';
-  } else if (url.includes('tech') || content.includes('tech') || content.includes('technology') || content.includes('software')) {
-    folder = 'Technology News';
-  } else if (url.includes('norway') || url.includes('norge') || content.includes('norway') || content.includes('norge')) {
-    folder = 'Norwegian Market';
-  } else if (url.includes('startup') || content.includes('startup') || content.includes('entrepreneur') || content.includes('business')) {
-    folder = 'Business & Entrepreneurship';
-  } else if (content.includes('career') || content.includes('job') || content.includes('professional') || content.includes('certification')) {
-    folder = 'Career Development';
-  } else if (content.includes('health') || content.includes('fitness') || content.includes('wellness') || content.includes('medical')) {
-    folder = 'Health & Wellness';
-  } else if (content.includes('travel') || content.includes('trip') || content.includes('vacation') || content.includes('destination')) {
-    folder = 'Travel Planning';
-  } else if (content.includes('education') || content.includes('learning') || content.includes('course') || content.includes('tutorial')) {
-    folder = 'Education & Learning';
-  } else if (content.includes('productivity') || content.includes('self-improvement') || content.includes('personal development')) {
-    folder = 'Personal Development';
-  }
-  
-  // Priority and urgency based on content
-  if (content.includes('urgent') || content.includes('asap') || content.includes('today')) {
-    priority = 'High';
-    urgencyLevel = 'Immediate';
-    actionRequired = true;
-  } else if (content.includes('this week') || content.includes('helgen') || content.includes('weekend')) {
-    priority = 'Medium';
-    urgencyLevel = 'This Week';
-    actionRequired = true;
-  } else if (content.includes('next week') || content.includes('next month')) {
-    priority = 'Medium';
-    urgencyLevel = 'This Month';
-  }
-  
-  // Estimated time based on content type
-  if (url.includes('article') || url.includes('news') || url.includes('youtube.com')) {
-    estimatedTime = 'Quick';
-  } else if (url.includes('report') || url.includes('analysis')) {
-    estimatedTime = 'Medium';
-  } else if (url.includes('research') || url.includes('study')) {
-    estimatedTime = 'Long';
-  }
-  
-  return {
-    folder,
-    priority,
-    urgencyLevel,
-    actionRequired,
-    estimatedTime
-  };
-};
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function GET() {
   try {
-    const allTips = await tipsService.getAllTips();
-    return NextResponse.json({ tips: allTips });
+    const tips = await tipsService.getAllTips();
+    return NextResponse.json(tips);
   } catch (error) {
     console.error('Error fetching tips:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch tips' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch tips' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { content, url, relevanceDate, relevanceEvent } = body;
+    const { content, selectedFolder } = await request.json();
 
-    if (!content && !url) {
-      return NextResponse.json(
-        { error: 'Content or URL is required' },
-        { status: 400 }
-      );
+    // Parse multiple tips from content
+    const tips = await parseMultipleTips(content, selectedFolder);
+
+    // Save all tips
+    const savedTips = [];
+    for (const tip of tips) {
+      await tipsService.addTip(tip);
+      savedTips.push(tip);
     }
 
-    const newTip: Tip = {
-      id: Date.now().toString(),
-      content: content || '',
-      url: url || '',
-      relevanceDate: relevanceDate || null,
-      relevanceEvent: relevanceEvent || null,
-      createdAt: new Date().toISOString(),
-      isProcessed: false
-    };
-
-    // Process with AI
-    const processedTip = await processTipWithAI(newTip);
-    
-    await tipsService.addTip(processedTip);
-
-    return NextResponse.json({ 
-      message: 'Tip created successfully',
-      tip: processedTip 
-    }, { status: 201 });
+    return NextResponse.json({
+      tips: savedTips,
+      count: savedTips.length,
+      aiProcessed: true
+    });
   } catch (error) {
-    console.error('Error creating tip:', error);
-    return NextResponse.json(
-      { error: 'Failed to create tip' },
-      { status: 500 }
-    );
+    console.error('Error creating tips:', error);
+    return NextResponse.json({ error: 'Failed to create tips' }, { status: 500 });
+  }
+}
+
+async function parseMultipleTips(content: string, selectedFolder?: string): Promise<Tip[]> {
+  // If no content, return empty array
+  if (!content.trim()) {
+    return [];
+  }
+
+  // If a folder is selected, use it directly without AI categorization
+  if (selectedFolder && selectedFolder.trim()) {
+    const tips: Tip[] = [];
+    const items = content.split(/[,\n]+/).map(item => item.trim()).filter(item => item);
+    
+    for (const item of items) {
+      const tip = await processSingleTip(item, '', selectedFolder);
+      tips.push(tip);
+    }
+    
+    return tips;
+  }
+
+  // Get custom folder names for AI categorization
+  const customFolders = await foldersService.getFolderNames();
+  const folderList = customFolders.length > 0 
+    ? `Available custom folders: ${customFolders.join(', ')}` 
+    : 'No custom folders available';
+
+  // AI prompt to parse multiple tips
+  const aiPrompt = `Parse this content into multiple separate tips and categorize them appropriately.
+
+Content: ${content}
+
+${folderList}
+
+Please provide a JSON response with the following structure:
+{
+  "tips": [
+    {
+      "content": "individual tip content",
+      "title": "short descriptive title",
+      "category": "folder name (use existing custom folders when appropriate, or create meaningful new ones)",
+      "urgency": "high/medium/low",
+      "priority": 1-10,
+      "summary": "exactly 3 bullet points summarizing this tip, each starting with • and being a complete sentence",
+      "url": "extract any URL from the content if present, otherwise empty string"
+    }
+  ]
+}
+
+Guidelines:
+- Split content by commas, "and", "or", or other logical separators
+- Each tip should be a distinct item or location
+- Group related tips under the same folder name
+- Use existing custom folders when content fits well
+- Create meaningful folder names for new categories
+- Each tip should have its own summary with exactly 3 bullet points
+- Extract URLs from content and include them in the url field
+- If content contains a URL, use the URL as the primary content and extract a meaningful title`;
+
+  let aiResponse;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that parses content into multiple tips and categorizes them. Always respond with valid JSON only.'
+        },
+        {
+          role: 'user',
+          content: aiPrompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+    });
+
+    aiResponse = completion.choices[0]?.message?.content;
+  } catch (aiError) {
+    console.error('AI processing failed:', aiError);
+    // Fallback: treat as single tip
+    return [await processSingleTip(content)];
+  }
+
+  // Parse AI response
+  let parsedResponse;
+  try {
+    const jsonMatch = aiResponse?.match(/```json\s*([\s\S]*?)\s*```/) || 
+                     aiResponse?.match(/\{[\s\S]*\}/);
+    const jsonString = jsonMatch ? jsonMatch[1] || jsonMatch[0] : aiResponse;
+    parsedResponse = JSON.parse(jsonString || '{}');
+  } catch (parseError) {
+    console.error('Failed to parse AI response:', parseError);
+    // Fallback: treat as single tip
+    return [await processSingleTip(content)];
+  }
+
+  // Convert parsed tips to Tip objects
+  const tips: Tip[] = [];
+  const tipArray = parsedResponse.tips || [];
+  
+  for (const tipData of tipArray) {
+    // Process each tip to get webpage content if URL is present
+    const processedTip = await processSingleTip(tipData.content, tipData.url);
+    
+    // Override with AI-categorized data
+    const tip: Tip = {
+      ...processedTip,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      content: tipData.content || processedTip.content,
+      url: tipData.url || processedTip.url,
+      title: tipData.title || processedTip.title,
+      folder: tipData.category || processedTip.folder,
+      priority: tipData.priority?.toString() || processedTip.priority,
+      summary: tipData.summary || processedTip.summary,
+      urgencyLevel: tipData.urgency || processedTip.urgencyLevel
+    };
+    tips.push(tip);
+  }
+
+  return tips;
+}
+
+async function processSingleTip(content: string, url?: string, folder?: string): Promise<Tip> {
+  let pageContent = '';
+  let pageTitle = '';
+
+  // Crawl webpage if URL is provided
+  if (url) {
+    const crawledContent = await crawlWebPage(url);
+    if (crawledContent) {
+      pageContent = crawledContent.content;
+      pageTitle = crawledContent.title || '';
+    }
+  }
+
+  // Get custom folder names for AI categorization
+  const customFolders = await foldersService.getFolderNames();
+  const folderList = customFolders.length > 0 
+    ? `Available custom folders: ${customFolders.join(', ')}` 
+    : 'No custom folders available';
+
+  // Prepare AI prompt with webpage content and custom folders
+  const aiPrompt = `Analyze this tip and categorize it appropriately. 
+
+Tip content: ${content}
+${url ? `URL: ${url}` : ''}
+
+${pageContent ? `Webpage content: ${pageContent}` : ''}
+
+${folderList}
+
+Please provide a JSON response with the following structure:
+{
+  "category": "specific folder name based on content. If the content fits well with one of the available custom folders, use that folder name. Otherwise, create a new meaningful folder name (e.g., 'Design Resources', 'Programming Tips', 'Business Strategy')",
+  "urgency": "high/medium/low",
+  "priority": 1-10,
+  "pageSummary": "exactly 3 bullet points summarizing the webpage content, each starting with • and being a complete sentence. If no webpage content, provide 3 bullet points about the tip content itself."
+}
+
+Focus on using existing custom folders when the content fits well, or creating meaningful, specific folder names that group related content together. For the page summary, provide exactly 3 complete, standalone bullet points that summarize the key information.`;
+
+  let aiResponse;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that categorizes and summarizes tips. Always respond with valid JSON only.'
+        },
+        {
+          role: 'user',
+          content: aiPrompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 500,
+    });
+
+    aiResponse = completion.choices[0]?.message?.content;
+  } catch (aiError) {
+    console.error('AI processing failed:', aiError);
+    // Fallback categorization
+    aiResponse = JSON.stringify({
+      category: 'General Tips',
+      urgency: 'medium',
+      priority: 5,
+      pageSummary: '• Tip saved for future reference\n• Content requires manual review\n• Consider organizing into relevant category'
+    });
+  }
+
+  // Parse AI response
+  let parsedResponse;
+  try {
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = aiResponse?.match(/```json\s*([\s\S]*?)\s*```/) || 
+                     aiResponse?.match(/\{[\s\S]*\}/);
+    const jsonString = jsonMatch ? jsonMatch[1] || jsonMatch[0] : aiResponse;
+    parsedResponse = JSON.parse(jsonString || '{}');
+  } catch (parseError) {
+    console.error('Failed to parse AI response:', parseError);
+    parsedResponse = {
+      category: 'General Tips',
+      urgency: 'medium',
+      priority: 5,
+      pageSummary: '• Tip saved for future reference\n• Content requires manual review\n• Consider organizing into relevant category'
+    };
+  }
+
+  // Determine title for the tip
+  let tipTitle = '';
+  if (pageTitle) {
+    tipTitle = pageTitle;
+  } else if (url) {
+    try {
+      const urlObj = new URL(url);
+      tipTitle = urlObj.hostname.replace('www.', '');
+    } catch {
+      tipTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+    }
+  } else if (content) {
+    tipTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+  } else {
+    tipTitle = 'Untitled';
+  }
+
+  // Create the tip with all required fields
+  const tip: Tip = {
+    id: Date.now().toString(),
+    content,
+    url: url || '',
+    title: tipTitle,
+    relevanceDate: null,
+    relevanceEvent: null,
+    createdAt: new Date().toISOString(),
+    folder: folder || parsedResponse.category || 'General Tips',
+    priority: parsedResponse.priority?.toString() || '5',
+    summary: parsedResponse.pageSummary || '• Tip saved for future reference\n• Content requires manual review\n• Consider organizing into relevant category',
+    tags: [],
+    actionRequired: false,
+    estimatedTime: undefined,
+    isProcessed: false,
+    aiProcessed: true,
+    userContext: '',
+    needsMoreInfo: false,
+    urgencyLevel: parsedResponse.urgency || 'medium'
+  };
+
+  return tip;
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json({ error: 'Tip ID is required' }, { status: 400 });
+    }
+
+    await tipsService.deleteTip(id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting tip:', error);
+    return NextResponse.json({ error: 'Failed to delete tip' }, { status: 500 });
   }
 } 

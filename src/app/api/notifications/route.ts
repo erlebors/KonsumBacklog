@@ -1,13 +1,35 @@
 import { NextResponse } from 'next/server';
-import { tipsService } from '@/lib/tipsService';
+import { promises as fs } from 'fs';
+import path from 'path';
+
+// In-memory storage for demo purposes
+let tips: Array<{
+  id: string;
+  content?: string;
+  relevanceDate?: string;
+  isProcessed?: boolean;
+}> = [];
+
+// Load tips from file
+const loadTips = async () => {
+  try {
+    const dataPath = path.join(process.cwd(), 'data', 'tips.json');
+    const data = await fs.readFile(dataPath, 'utf-8');
+    tips = JSON.parse(data);
+  } catch {
+    tips = [];
+  }
+};
+
+// Initialize tips on module load
+loadTips();
 
 export async function GET() {
   try {
-    // Use the tipsService to get all tips
-    const allTips = await tipsService.getAllTips();
+    await loadTips(); // Refresh tips from file
     
     const today = new Date();
-    const urgentTips = allTips.filter(tip => {
+    const urgentTips = tips.filter(tip => {
       if (tip.isProcessed) return false;
       if (!tip.relevanceDate) return false;
       

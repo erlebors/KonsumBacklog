@@ -31,7 +31,9 @@ export default function Home() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Tip Organizer
+            <span>Organ</span>
+            <span className="text-blue-600">AI</span>
+            <span>ze</span>
           </h1>
           <p className="text-gray-600">
             Save and organize your tips, links, and useful information

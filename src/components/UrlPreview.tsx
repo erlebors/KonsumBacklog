@@ -1,123 +1,166 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ExternalLink } from 'lucide-react';
-
-interface UrlMetadata {
-  title: string;
-  description: string;
-  image: string | null;
-  favicon: string | null;
-  domain: string;
-}
+import { ExternalLink, Globe } from 'lucide-react';
 
 interface UrlPreviewProps {
   url: string;
 }
 
+interface UrlMetadata {
+  title?: string;
+  description?: string;
+  image?: string;
+  siteName?: string;
+  favicon?: string;
+}
+
 export default function UrlPreview({ url }: UrlPreviewProps) {
   const [metadata, setMetadata] = useState<UrlMetadata | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!url) return;
+
     const fetchMetadata = async () => {
+      setLoading(true);
+      setError(null);
+      
       try {
-        setLoading(true);
-        setError(false);
+        const response = await fetch('/api/url-metadata', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url }),
+        });
+
+        const data = await response.json();
         
-        const response = await fetch(`/api/url-metadata?url=${encodeURIComponent(url)}`);
-        if (response.ok) {
-          const data = await response.json();
-          setMetadata(data);
-        } else {
-          setError(true);
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch metadata');
         }
-      } catch {
-        setError(true);
+
+        setMetadata(data.metadata);
+      } catch (err) {
+        console.error('Error fetching URL metadata:', err);
+        setError('Failed to load preview');
+        
+        // Set fallback metadata instead of showing error
+        try {
+          const urlObj = new URL(url);
+          setMetadata({
+            title: urlObj.hostname.replace('www.', ''),
+            description: `Link to ${urlObj.hostname}`,
+            image: undefined,
+            siteName: urlObj.hostname.replace('www.', ''),
+            favicon: `${urlObj.protocol}//${urlObj.host}/favicon.ico`,
+          });
+          setError(null); // Clear error since we have fallback
+        } catch {
+          // If URL parsing fails, keep the error state
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    if (url) {
-      fetchMetadata();
-    }
+    fetchMetadata();
   }, [url]);
 
   if (loading) {
     return (
-      <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
-        <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
-        <div className="flex-1">
-          <div className="h-4 bg-gray-200 rounded animate-pulse mb-1"></div>
-          <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
+      <div className="mb-3 p-3 bg-gray-50 rounded-md border">
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
+          <div className="flex-1 space-y-2">
+            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   if (error || !metadata) {
-    return (
-      <a 
-        href={url} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
-      >
-        <ExternalLink className="w-4 h-4" />
-        <span className="text-sm">{new URL(url).hostname}</span>
-      </a>
-    );
+    return null;
   }
 
+  const domain = (() => {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname.replace('www.', '');
+    } catch {
+      return 'Unknown site';
+    }
+  })();
+
   return (
-    <a 
-      href={url} 
-      target="_blank" 
-      rel="noopener noreferrer"
-      className="block p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors"
-    >
-      <div className="flex items-start space-x-3">
-        {metadata.favicon && (
-          <img 
-            src={metadata.favicon} 
-            alt=""
-            className="w-4 h-4 mt-0.5 flex-shrink-0"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        )}
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center space-x-2 mb-1">
-            <h4 className="text-sm font-medium text-gray-900 line-clamp-1">
-              {metadata.title}
-            </h4>
-            <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0" />
+    <div className="mb-3 p-3 bg-gray-50 rounded-md border hover:bg-gray-100 transition-colors">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block"
+      >
+        <div className="flex items-start space-x-3">
+          {/* Favicon or default icon */}
+          <div className="flex-shrink-0 mt-1">
+            {metadata.favicon ? (
+              <img
+                src={metadata.favicon}
+                alt=""
+                className="w-4 h-4 rounded"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : (
+              <Globe className="w-4 h-4 text-gray-500" />
+            )}
           </div>
-          
-          <p className="text-xs text-gray-600 line-clamp-2 mb-1">
-            {metadata.description}
-          </p>
-          
-          <p className="text-xs text-gray-500">
-            {metadata.domain}
-          </p>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            {/* Domain */}
+            <div className="text-xs text-gray-500 mb-1">{domain}</div>
+            
+            {/* Title */}
+            {metadata.title && (
+              <div className="text-sm font-medium text-gray-900 mb-1 line-clamp-2">
+                {metadata.title}
+              </div>
+            )}
+            
+            {/* Description */}
+            {metadata.description && (
+              <div className="text-sm text-gray-600 line-clamp-2">
+                {metadata.description}
+              </div>
+            )}
+          </div>
+
+          {/* External link icon */}
+          <div className="flex-shrink-0 mt-1">
+            <ExternalLink className="w-3 h-3 text-gray-400" />
+          </div>
         </div>
-        
+
+        {/* Image preview */}
         {metadata.image && (
-          <img 
-            src={metadata.image} 
-            alt=""
-            className="w-16 h-16 object-cover rounded flex-shrink-0"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
+          <div className="mt-3">
+            <img
+              src={metadata.image}
+              alt=""
+              className="w-full h-32 object-cover rounded-md"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          </div>
         )}
-      </div>
-    </a>
+      </a>
+    </div>
   );
 } 

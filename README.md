@@ -1,11 +1,11 @@
-# Tip Organizer
+# OrganAIze
 
 A web application for organizing tips, links, LinkedIn posts, and other useful information with AI-powered categorization and smart notifications.
 
 ## Features
 
 - **Quick Input**: Save tips with minimal effort - just content, URL, and relevance information
-- **AI Organization**: Automatic categorization and tagging using Azure OpenAI
+- **AI Organization**: Automatic categorization and tagging using OpenAI
 - **Smart Notifications**: Get notified about tips that are relevant soon
 - **Easy Review**: Filter and review tips by urgency, category, or processing status
 - **Clean Interface**: Simple, intuitive design focused on quick actions
@@ -17,18 +17,14 @@ A web application for organizing tips, links, LinkedIn posts, and other useful i
    npm install
    ```
 
-2. **Configure Azure OpenAI** (Optional)
+2. **Configure Environment Variables**
    
-   Create a `.env.local` file in the root directory with your Azure OpenAI credentials:
+   Create a `.env.local` file in the root directory with your OpenAI API key:
    ```
-   AZURE_OPENAI_ENDPOINT=your_azure_openai_endpoint_here
-   AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
-   AZURE_OPENAI_DEPLOYMENT=your_deployment_name_here
-   AZURE_OPENAI_MODEL_NAME=your_model_name_here
-   AZURE_OPENAI_API_VERSION=2024-02-15-preview
+   OPENAI_API_KEY=your_openai_api_key_here
    ```
 
-   If you don't configure Azure OpenAI, the app will still work but without AI categorization.
+   If you don't configure OpenAI, the app will still work but without AI categorization.
 
 3. **Run the Development Server**
    ```bash
@@ -38,6 +34,26 @@ A web application for organizing tips, links, LinkedIn posts, and other useful i
 4. **Open your browser**
    
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+## Deployment
+
+### Environment Variables Required
+
+For deployment (Vercel, Netlify, etc.), you need to set these environment variables:
+
+- **`OPENAI_API_KEY`** (Required): Your OpenAI API key for AI features
+
+### Vercel Deployment
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. In Vercel dashboard, go to **Settings** → **Environment Variables**
+4. Add `OPENAI_API_KEY` with your API key value
+5. Deploy
+
+### Other Platforms
+
+Set the `OPENAI_API_KEY` environment variable in your deployment platform's settings.
 
 ## Usage
 
@@ -68,7 +84,7 @@ This demo uses local file storage (`data/tips.json`). In production, you should:
 ## Technologies Used
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **AI**: Azure OpenAI
+- **AI**: OpenAI GPT-4o-mini
 - **Icons**: Lucide React
 - **Notifications**: React Hot Toast
 - **Date Handling**: date-fns
