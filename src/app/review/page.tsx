@@ -5,7 +5,6 @@ import {
   ArrowLeft, 
   Folder, 
   Clock, 
-  AlertCircle, 
   Plus, 
   Edit3, 
   CheckCircle, 
@@ -18,7 +17,7 @@ import {
   Settings,
   X
 } from 'lucide-react';
-import { format, isAfter, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import UrlPreview from '@/components/UrlPreview';
@@ -67,7 +66,7 @@ export default function ReviewPage() {
   const [selectedTip, setSelectedTip] = useState<Tip | null>(null);
   const [showContextModal, setShowContextModal] = useState(false);
   const [contextInput, setContextInput] = useState('');
-  const [filter, setFilter] = useState<'all' | 'urgent' | 'needsInfo' | 'completed'>('all');
+  const [filter, setFilter] = useState<'all' | 'completed'>('all');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedSubFolders, setExpandedSubFolders] = useState<Set<string>>(new Set());
   const [expandedUrlPreviews, setExpandedUrlPreviews] = useState<Set<string>>(new Set());
@@ -180,29 +179,8 @@ export default function ReviewPage() {
     }
   };
 
-  const getUrgentTips = () => {
-    const today = new Date();
-    return tips.filter(tip => 
-      tip.relevanceDate && 
-      isAfter(new Date(tip.relevanceDate), today) &&
-      isAfter(new Date(tip.relevanceDate), addDays(today, 7)) &&
-      !tip.isProcessed
-    );
-  };
-
-  const getTipsNeedingInfo = () => {
-    return tips.filter(tip => 
-      !tip.isProcessed && 
-      (!tip.userContext || tip.needsMoreInfo)
-    );
-  };
-
   const getFilteredTips = () => {
     switch (filter) {
-      case 'urgent':
-        return getUrgentTips();
-      case 'needsInfo':
-        return getTipsNeedingInfo();
       case 'completed':
         return tips.filter(tip => tip.isProcessed);
       default:
@@ -258,119 +236,16 @@ export default function ReviewPage() {
         };
       });
 
-      const urgentCount = folderTips.filter(tip => 
-        !tip.isProcessed && (
-          tip.priority === 'High' || 
-          (tip.relevanceDate && isAfter(new Date(tip.relevanceDate), addDays(new Date(), 3)))
-        )
-      ).length;
-
-      // Calculate folder urgency score
-      const getUrgencyScore = (tip: Tip): number => {
-        let score = 0;
-        
-        // Priority score
-        if (tip.priority === 'High') score += 100;
-        else if (tip.priority === 'Medium') score += 50;
-        else score += 10;
-        
-        // Date urgency score
-        if (tip.relevanceDate) {
-          const tipDate = new Date(tip.relevanceDate);
-          const today = new Date();
-          const daysUntil = Math.ceil((tipDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          
-          if (daysUntil <= 0) score += 200; // Overdue
-          else if (daysUntil <= 1) score += 150; // Today/tomorrow
-          else if (daysUntil <= 3) score += 100; // This week
-          else if (daysUntil <= 7) score += 75; // Next week
-          else if (daysUntil <= 30) score += 25; // This month
-        }
-        
-        // Urgency level score
-        if (tip.urgencyLevel === 'Immediate') score += 200;
-        else if (tip.urgencyLevel === 'This Week') score += 100;
-        else if (tip.urgencyLevel === 'This Month') score += 50;
-        
-        return score;
-      };
-
-      // Sort subfolders by urgency
-      subFolders.sort((a, b) => {
-        // For completed tips, sort by completion date (most recent first)
-        if (a.tip.isProcessed && b.tip.isProcessed) {
-          return new Date(b.tip.createdAt).getTime() - new Date(a.tip.createdAt).getTime();
-        }
-        
-        // For active tips, sort by urgency score first
-        const aScore = getUrgencyScore(a.tip);
-        const bScore = getUrgencyScore(b.tip);
-        
-        if (aScore !== bScore) return bScore - aScore;
-        
-        // Then by relevance date
-        if (a.tip.relevanceDate && b.tip.relevanceDate) {
-          return new Date(a.tip.relevanceDate).getTime() - new Date(b.tip.relevanceDate).getTime();
-        }
-        
-        // Then by creation date
-        return new Date(b.tip.createdAt).getTime() - new Date(a.tip.createdAt).getTime();
-      });
-
       return {
         name,
         tips: [], // No direct tips, only subfolders
-        urgentCount,
+        urgentCount: 0, // No longer used
         totalCount: folderTips.length,
         isExpanded: expandedFolders.has(name),
         subFolders: subFolders
       };
     }).sort((a, b) => {
-      // Sort folders by their most urgent tip
-      const getFolderUrgencyScore = (folder: FolderGroup): number => {
-        if (!folder.subFolders || folder.subFolders.length === 0) return 0;
-        
-        const getTipUrgencyScore = (tip: Tip): number => {
-          let score = 0;
-          
-          // Priority score
-          if (tip.priority === 'High') score += 100;
-          else if (tip.priority === 'Medium') score += 50;
-          else score += 10;
-          
-          // Date urgency score
-          if (tip.relevanceDate) {
-            const tipDate = new Date(tip.relevanceDate);
-            const today = new Date();
-            const daysUntil = Math.ceil((tipDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysUntil <= 0) score += 200; // Overdue
-            else if (daysUntil <= 1) score += 150; // Today/tomorrow
-            else if (daysUntil <= 3) score += 100; // This week
-            else if (daysUntil <= 7) score += 75; // Next week
-            else if (daysUntil <= 30) score += 25; // This month
-          }
-          
-          // Urgency level score
-          if (tip.urgencyLevel === 'Immediate') score += 200;
-          else if (tip.urgencyLevel === 'This Week') score += 100;
-          else if (tip.urgencyLevel === 'This Month') score += 50;
-          
-          return score;
-        };
-        
-        return Math.max(...folder.subFolders.map(sub => getTipUrgencyScore(sub.tip)));
-      };
-      
-      const aScore = getFolderUrgencyScore(a);
-      const bScore = getFolderUrgencyScore(b);
-      
-      if (aScore !== bScore) return bScore - aScore;
-      
-      // If urgency is the same, sort by urgent count
-      if (a.urgentCount !== b.urgentCount) return b.urgentCount - a.urgentCount;
-      
-      // Finally, sort alphabetically
+      // Sort folders alphabetically
       return a.name.localeCompare(b.name);
     });
   };
@@ -573,26 +448,6 @@ export default function ReviewPage() {
                 All ({tips.filter(t => !t.isProcessed).length})
               </button>
               <button
-                onClick={() => setFilter('urgent')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filter === 'urgent' 
-                    ? 'bg-red-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Urgent ({getUrgentTips().length})
-              </button>
-              <button
-                onClick={() => setFilter('needsInfo')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filter === 'needsInfo' 
-                    ? 'bg-orange-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Needs Info ({getTipsNeedingInfo().length})
-              </button>
-              <button
                 onClick={() => setFilter('completed')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   filter === 'completed' 
@@ -650,12 +505,6 @@ export default function ReviewPage() {
                       <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
                         {group.totalCount}
                       </span>
-                      {group.urgentCount > 0 && (
-                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs flex items-center">
-                          <AlertCircle className="w-3 h-3 mr-1" />
-                          {group.urgentCount}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>

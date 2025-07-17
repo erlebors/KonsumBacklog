@@ -8,35 +8,96 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    // Fetch the HTML content
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; KonsumBacklog/1.0)',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.status}`);
+    // Validate URL format
+    let validatedUrl: URL;
+    try {
+      validatedUrl = new URL(url);
+    } catch {
+      return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
     }
 
-    const html = await response.text();
+    // Only allow HTTP/HTTPS URLs
+    if (!['http:', 'https:'].includes(validatedUrl.protocol)) {
+      return NextResponse.json({ error: 'Only HTTP/HTTPS URLs are supported' }, { status: 400 });
+    }
 
-    // Parse metadata using regex (simple approach)
-    const metadata = {
-      title: extractMetaTag(html, 'title') || extractMetaTag(html, 'og:title') || extractMetaTag(html, 'twitter:title'),
-      description: extractMetaTag(html, 'description') || extractMetaTag(html, 'og:description') || extractMetaTag(html, 'twitter:description'),
-      image: extractMetaTag(html, 'og:image') || extractMetaTag(html, 'twitter:image'),
-      siteName: extractMetaTag(html, 'og:site_name'),
-      favicon: extractFavicon(html, url),
-    };
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    return NextResponse.json({ metadata });
+    try {
+      // Fetch the HTML content with timeout
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; KonsumBacklog/1.0)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const html = await response.text();
+
+      // Parse metadata using regex (simple approach)
+      const metadata = {
+        title: extractMetaTag(html, 'title') || extractMetaTag(html, 'og:title') || extractMetaTag(html, 'twitter:title'),
+        description: extractMetaTag(html, 'description') || extractMetaTag(html, 'og:description') || extractMetaTag(html, 'twitter:description'),
+        image: extractMetaTag(html, 'og:image') || extractMetaTag(html, 'twitter:image'),
+        siteName: extractMetaTag(html, 'og:site_name'),
+        favicon: extractFavicon(html, url),
+      };
+
+      // If no title found, use domain as fallback
+      if (!metadata.title) {
+        metadata.title = validatedUrl.hostname.replace('www.', '');
+      }
+
+      return NextResponse.json({ metadata });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Return fallback metadata instead of error
+      const fallbackMetadata = {
+        title: validatedUrl.hostname.replace('www.', ''),
+        description: `Link to ${validatedUrl.hostname}`,
+        image: null,
+        siteName: validatedUrl.hostname.replace('www.', ''),
+        favicon: `${validatedUrl.protocol}//${validatedUrl.host}/favicon.ico`,
+      };
+
+      console.warn(`Failed to fetch metadata for ${url}:`, fetchError);
+      return NextResponse.json({ metadata: fallbackMetadata });
+    }
   } catch (error) {
-    console.error('Error fetching URL metadata:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch metadata' },
-      { status: 500 }
-    );
+    console.error('Error in URL metadata API:', error);
+    
+    // Return fallback metadata for any other errors
+    try {
+      const body = await request.json();
+      const url = new URL(body.url || '');
+      const fallbackMetadata = {
+        title: url.hostname.replace('www.', ''),
+        description: `Link to ${url.hostname}`,
+        image: null,
+        siteName: url.hostname.replace('www.', ''),
+        favicon: `${url.protocol}//${url.host}/favicon.ico`,
+      };
+      return NextResponse.json({ metadata: fallbackMetadata });
+    } catch {
+      return NextResponse.json(
+        { error: 'Failed to process URL' },
+        { status: 500 }
+      );
+    }
   }
 }
 

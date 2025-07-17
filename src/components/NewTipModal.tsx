@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Link, FileText, Brain } from 'lucide-react';
+import { X, FileText, Brain, Folder } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface NewTipModalProps {
@@ -9,17 +9,25 @@ interface NewTipModalProps {
   onClose: () => void;
 }
 
+interface TipPreview {
+  content: string;
+  title: string;
+  category: string;
+  url: string;
+}
+
 export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
   const [content, setContent] = useState('');
-  const [url, setUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiProcessing, setAiProcessing] = useState(false);
+  const [tipPreviews, setTipPreviews] = useState<TipPreview[]>([]);
+  const [showPreviews, setShowPreviews] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!content.trim() && !url.trim()) {
-      toast.error('Please provide some content or a URL');
+    if (!content.trim()) {
+      toast.error('Please provide some content');
       return;
     }
 
@@ -29,7 +37,6 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
     try {
       const tipData = {
         content: content.trim(),
-        url: url.trim(),
         createdAt: new Date().toISOString(),
       };
 
@@ -47,7 +54,10 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
         throw new Error(result?.error || 'Failed to save tip');
       }
 
-      if (result.aiProcessed) {
+      if (result.tips && result.tips.length > 1) {
+        // Multiple tips were created
+        toast.success(`${result.tips.length} tips saved and processed with AI!`);
+      } else if (result.aiProcessed) {
         toast.success('Tip saved and processed with AI!');
       } else if (result.aiError) {
         toast.success('Tip saved! (AI processing failed)');
@@ -64,10 +74,42 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
     }
   };
 
+  const handlePreview = async () => {
+    if (!content.trim()) {
+      toast.error('Please provide some content');
+      return;
+    }
+
+    setAiProcessing(true);
+    try {
+      const response = await fetch('/api/tips/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: content.trim(),
+        }),
+      });
+
+      const result = await response.json();
+      if (response.ok && result.tips) {
+        setTipPreviews(result.tips);
+        setShowPreviews(true);
+      }
+    } catch (error) {
+      console.error('Error previewing tips:', error);
+      toast.error('Failed to preview tips');
+    } finally {
+      setAiProcessing(false);
+    }
+  };
+
   const handleClose = () => {
     setContent('');
-    setUrl('');
     setAiProcessing(false);
+    setTipPreviews([]);
+    setShowPreviews(false);
     onClose();
   };
 
@@ -75,7 +117,7 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold text-gray-900">New Tip</h2>
           <button
@@ -90,37 +132,64 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <FileText className="w-4 h-4 inline mr-1" />
-              Content (optional)
+              Content
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Quick note, tip, or description..."
+              placeholder="Enter tips, URLs, or descriptions... You can include multiple items separated by commas, like: 'https://example.com, smithsonian institute, museum of spies'"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              rows={3}
+              rows={4}
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Tip: You can include multiple items (text or URLs) separated by commas, &quot;and&quot;, or &quot;or&quot;. Each will be created as a separate tip in the same folder.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Link className="w-4 h-4 inline mr-1" />
-              URL (optional)
-            </label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+          {/* Preview Button */}
+          {content.trim() && (
+            <button
+              type="button"
+              onClick={handlePreview}
+              disabled={aiProcessing}
+              className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50 transition-colors"
+            >
+              {aiProcessing ? 'Analyzing...' : 'Preview Tips'}
+            </button>
+          )}
+
+          {/* Tip Previews */}
+          {showPreviews && tipPreviews.length > 0 && (
+            <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">
+                Preview: {tipPreviews.length} tip{tipPreviews.length !== 1 ? 's' : ''} will be created
+              </h3>
+              <div className="space-y-2">
+                {tipPreviews.map((tip, index) => (
+                  <div key={index} className="flex items-center space-x-2 text-sm">
+                    <Folder className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-600">{tip.title}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                      {tip.category}
+                    </span>
+                    {tip.url && (
+                      <span className="text-green-600 text-xs">(URL detected)</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* AI Processing Indicator */}
           {aiProcessing && (
             <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-md">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
               <Brain className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-blue-800">AI is analyzing your tip...</span>
+              <span className="text-sm text-blue-800">
+                {showPreviews ? 'Analyzing your content...' : 'AI is analyzing your tip...'}
+              </span>
             </div>
           )}
 
@@ -134,10 +203,10 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || (!content.trim() && !url.trim())}
+              disabled={isSubmitting || !content.trim()}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSubmitting ? 'Saving...' : 'Save Tip'}
+              {isSubmitting ? 'Saving...' : 'Save Tip' + (tipPreviews.length > 1 ? 's' : '')}
             </button>
           </div>
         </form>

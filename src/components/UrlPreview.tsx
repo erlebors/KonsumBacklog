@@ -36,15 +36,31 @@ export default function UrlPreview({ url }: UrlPreviewProps) {
           body: JSON.stringify({ url }),
         });
 
+        const data = await response.json();
+        
         if (!response.ok) {
-          throw new Error('Failed to fetch metadata');
+          throw new Error(data.error || 'Failed to fetch metadata');
         }
 
-        const data = await response.json();
         setMetadata(data.metadata);
       } catch (err) {
         console.error('Error fetching URL metadata:', err);
         setError('Failed to load preview');
+        
+        // Set fallback metadata instead of showing error
+        try {
+          const urlObj = new URL(url);
+          setMetadata({
+            title: urlObj.hostname.replace('www.', ''),
+            description: `Link to ${urlObj.hostname}`,
+            image: undefined,
+            siteName: urlObj.hostname.replace('www.', ''),
+            favicon: `${urlObj.protocol}//${urlObj.host}/favicon.ico`,
+          });
+          setError(null); // Clear error since we have fallback
+        } catch {
+          // If URL parsing fails, keep the error state
+        }
       } finally {
         setLoading(false);
       }
