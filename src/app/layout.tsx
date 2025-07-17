@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tip Organizer",
-  description: "Organize your tips, links, and useful information with AI",
+  title: "OrganAIze",
+  description: "AI-powered tip and link organizer with smart categorization",
   icons: {
     icon: [
       {

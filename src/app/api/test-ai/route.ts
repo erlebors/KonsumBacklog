@@ -1,33 +1,23 @@
 import { NextResponse } from 'next/server';
-import { AzureOpenAI } from 'openai';
+import OpenAI from 'openai';
 
 export async function GET() {
   try {
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-    const modelName = process.env.AZURE_OPENAI_MODEL_NAME;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    const apiVersion = process.env.AZURE_OPENAI_API_VERSION;
+    const apiKey = process.env.OPENAI_API_KEY;
 
-    // Check if all required environment variables are set
-    const missingVars = [];
-    if (!endpoint) missingVars.push('AZURE_OPENAI_ENDPOINT');
-    if (!modelName) missingVars.push('AZURE_OPENAI_MODEL_NAME');
-    if (!deployment) missingVars.push('AZURE_OPENAI_DEPLOYMENT');
-    if (!apiKey) missingVars.push('AZURE_OPENAI_API_KEY');
-    if (!apiVersion) missingVars.push('AZURE_OPENAI_API_VERSION');
-
-    if (missingVars.length > 0) {
+    // Check if the API key is set
+    if (!apiKey) {
       return NextResponse.json({
         status: 'error',
-        message: 'Missing Azure OpenAI credentials',
-        missing: missingVars
+        message: 'Missing OpenAI API key',
+        missing: ['OPENAI_API_KEY']
       }, { status: 400 });
     }
 
     // Test the connection with a simple prompt
-    const options = { endpoint, apiKey, deployment, apiVersion };
-    const client = new AzureOpenAI(options);
+    const client = new OpenAI({
+      apiKey: apiKey
+    });
 
     const response = await client.chat.completions.create({
       messages: [
@@ -36,20 +26,18 @@ export async function GET() {
       ],
       max_tokens: 50,
       temperature: 0,
-      model: modelName as string
+      model: 'gpt-4o-mini'
     });
 
     const aiResponse = response?.choices?.[0]?.message?.content;
 
     return NextResponse.json({
       status: 'success',
-      message: 'Azure OpenAI is configured and working',
+      message: 'OpenAI is configured and working',
       aiResponse,
       config: {
-        endpoint: endpoint ? 'Set' : 'Missing',
-        modelName,
-        deployment,
-        apiVersion
+        apiKey: apiKey ? 'Set' : 'Missing',
+        model: 'gpt-4o-mini'
       }
     });
 
@@ -57,7 +45,7 @@ export async function GET() {
     console.error('AI Test Error:', error);
     return NextResponse.json({
       status: 'error',
-      message: 'Failed to connect to Azure OpenAI',
+      message: 'Failed to connect to OpenAI',
       error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }

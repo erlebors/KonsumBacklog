@@ -6,6 +6,7 @@ export interface Tip {
   id: string;
   content: string;
   url: string;
+  title?: string;
   relevanceDate: string | null;
   relevanceEvent: string | null;
   createdAt: string;

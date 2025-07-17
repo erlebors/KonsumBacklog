@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Link, Calendar, FileText, Brain } from 'lucide-react';
+import { X, Link, FileText, Brain } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface NewTipModalProps {
@@ -12,14 +12,12 @@ interface NewTipModalProps {
 export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
   const [content, setContent] = useState('');
   const [url, setUrl] = useState('');
-  const [relevanceDate, setRelevanceDate] = useState('');
-  const [relevanceEvent, setRelevanceEvent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiProcessing, setAiProcessing] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!content.trim() && !url.trim()) {
       toast.error('Please provide some content or a URL');
       return;
@@ -27,13 +25,11 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
 
     setIsSubmitting(true);
     setAiProcessing(true);
-    
+
     try {
       const tipData = {
         content: content.trim(),
         url: url.trim(),
-        relevanceDate: relevanceDate || null,
-        relevanceEvent: relevanceEvent.trim() || null,
         createdAt: new Date().toISOString(),
       };
 
@@ -45,19 +41,20 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
         body: JSON.stringify(tipData),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.tip.aiProcessed) {
-          toast.success('Tip saved and processed with AI!');
-        } else if (result.tip.aiError) {
-          toast.success('Tip saved! (AI processing failed)');
-        } else {
-          toast.success('Tip saved successfully!');
-        }
-        handleClose();
-      } else {
-        throw new Error('Failed to save tip');
+      const result = await response.json();
+
+      if (!response.ok || !result || typeof result !== 'object') {
+        throw new Error(result?.error || 'Failed to save tip');
       }
+
+      if (result.aiProcessed) {
+        toast.success('Tip saved and processed with AI!');
+      } else if (result.aiError) {
+        toast.success('Tip saved! (AI processing failed)');
+      } else {
+        toast.success('Tip saved successfully!');
+      }
+      handleClose();
     } catch (error) {
       console.error('Error saving tip:', error);
       toast.error('Failed to save tip. Please try again.');
@@ -70,8 +67,6 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
   const handleClose = () => {
     setContent('');
     setUrl('');
-    setRelevanceDate('');
-    setRelevanceEvent('');
     setAiProcessing(false);
     onClose();
   };
@@ -118,34 +113,6 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
               placeholder="https://example.com"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="w-4 h-4 inline mr-1" />
-                Relevant Date (optional)
-              </label>
-              <input
-                type="date"
-                value={relevanceDate}
-                onChange={(e) => setRelevanceDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Relevant Event/Context (optional)
-              </label>
-              <input
-                type="text"
-                value={relevanceEvent}
-                onChange={(e) => setRelevanceEvent(e.target.value)}
-                placeholder="Meeting with John, Conference, etc."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
           </div>
 
           {/* AI Processing Indicator */}

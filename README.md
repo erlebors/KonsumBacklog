@@ -1,11 +1,11 @@
-# Tip Organizer
+# OrganAIze
 
 A web application for organizing tips, links, LinkedIn posts, and other useful information with AI-powered categorization and smart notifications.
 
 ## Features
 
 - **Quick Input**: Save tips with minimal effort - just content, URL, and relevance information
-- **AI Organization**: Automatic categorization and tagging using Azure OpenAI
+- **AI Organization**: Automatic categorization and tagging using OpenAI
 - **Smart Notifications**: Get notified about tips that are relevant soon
 - **Easy Review**: Filter and review tips by urgency, category, or processing status
 - **Clean Interface**: Simple, intuitive design focused on quick actions
@@ -17,18 +17,14 @@ A web application for organizing tips, links, LinkedIn posts, and other useful i
    npm install
    ```
 
-2. **Configure Azure OpenAI** (Optional)
+2. **Configure OpenAI** (Optional)
    
-   Create a `.env.local` file in the root directory with your Azure OpenAI credentials:
+   Create a `.env.local` file in the root directory with your OpenAI API key:
    ```
-   AZURE_OPENAI_ENDPOINT=your_azure_openai_endpoint_here
-   AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
-   AZURE_OPENAI_DEPLOYMENT=your_deployment_name_here
-   AZURE_OPENAI_MODEL_NAME=your_model_name_here
-   AZURE_OPENAI_API_VERSION=2024-02-15-preview
+   OPENAI_API_KEY=your_openai_api_key_here
    ```
 
-   If you don't configure Azure OpenAI, the app will still work but without AI categorization.
+   If you don't configure OpenAI, the app will still work but without AI categorization.
 
 3. **Run the Development Server**
    ```bash
@@ -68,7 +64,7 @@ This demo uses local file storage (`data/tips.json`). In production, you should:
 ## Technologies Used
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **AI**: Azure OpenAI
+- **AI**: OpenAI GPT-3.5 Turbo
 - **Icons**: Lucide React
 - **Notifications**: React Hot Toast
 - **Date Handling**: date-fns
