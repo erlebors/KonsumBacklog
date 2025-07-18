@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Link, Calendar, Clock, CheckCircle, Trash2, AlertCircle, Timer, Tag } from 'lucide-react';
+import { X, Clock, CheckCircle, Trash2, Calendar, Tag, AlertCircle, Timer, Link } from 'lucide-react';
 import { format, isAfter, addDays } from 'date-fns';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { createAuthenticatedRequest } from '@/lib/clientAuth';
 
 interface Tip {
   id: string;
@@ -32,16 +34,18 @@ export default function ReviewLaterModal({ isOpen, onClose }: ReviewLaterModalPr
   const [tips, setTips] = useState<Tip[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'urgent' | 'upcoming' | 'processed'>('all');
+  const { user } = useAuth();
 
   useEffect(() => {
     if (isOpen) {
       fetchTips();
     }
-  }, [isOpen]);
+  }, [isOpen, user]); // Refetch tips when modal opens or user authentication state changes
 
   const fetchTips = async () => {
     try {
-      const response = await fetch('/api/tips');
+      const requestOptions = await createAuthenticatedRequest('/api/tips');
+      const response = await fetch('/api/tips', requestOptions);
       if (response.ok) {
         const data = await response.json();
         setTips(data.tips || []);
@@ -56,13 +60,15 @@ export default function ReviewLaterModal({ isOpen, onClose }: ReviewLaterModalPr
 
   const markAsProcessed = async (tipId: string) => {
     try {
-      const response = await fetch(`/api/tips/${tipId}`, {
+      const requestOptions = await createAuthenticatedRequest(`/api/tips/${tipId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ isProcessed: true }),
       });
+      
+      const response = await fetch(`/api/tips/${tipId}`, requestOptions);
 
       if (response.ok) {
         setTips(tips.map(tip => 
@@ -80,9 +86,11 @@ export default function ReviewLaterModal({ isOpen, onClose }: ReviewLaterModalPr
     if (!confirm('Are you sure you want to delete this tip?')) return;
 
     try {
-      const response = await fetch(`/api/tips/${tipId}`, {
+      const requestOptions = await createAuthenticatedRequest(`/api/tips/${tipId}`, {
         method: 'DELETE',
       });
+      
+      const response = await fetch(`/api/tips/${tipId}`, requestOptions);
 
       if (response.ok) {
         setTips(tips.filter(tip => tip.id !== tipId));

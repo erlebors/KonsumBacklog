@@ -23,6 +23,7 @@ import Link from 'next/link';
 import UrlPreview from '@/components/UrlPreview';
 import FolderModal from '@/components/FolderModal';
 import { createAuthenticatedRequest } from '@/lib/clientAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Tip {
   id: string;
@@ -84,9 +85,11 @@ export default function ReviewPage() {
   } | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
 
+  const { user } = useAuth();
+
   useEffect(() => {
     fetchTips();
-  }, []);
+  }, [user]); // Refetch tips when user authentication state changes
 
   const fetchTips = async () => {
     try {
