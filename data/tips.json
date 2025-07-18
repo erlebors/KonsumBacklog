@@ -1,34 +1,19 @@
 [
   {
-    "id": "1752796688810m7l9gf1vw",
-    "content": "Test tip for authentication debugging",
+    "id": "1752796896689mguk2f1to",
+    "content": "heippådeg",
     "url": "",
-    "title": "Authentication Debugging Tip",
+    "title": "Understanding Heippådeg",
     "relevanceDate": null,
     "relevanceEvent": null,
-    "createdAt": "2025-07-17T23:58:08.809Z",
-    "folder": "Debugging",
+    "createdAt": "2025-07-18T00:01:36.689Z",
+    "folder": "General Knowledge",
     "priority": "5",
-    "summary": "• This tip focuses on debugging authentication issues. • It is essential for ensuring secure access to applications. • Proper debugging can help identify and resolve authentication failures.",
-    "tags": [],
-    "actionRequired": false,
-    "isProcessed": false,
-    "aiProcessed": true,
-    "userContext": "",
-    "needsMoreInfo": false,
-    "urgencyLevel": "medium"
-  },
-  {
-    "id": "1752796690416esob7cvwb",
-    "content": "No custom folders available",
-    "url": "",
-    "title": "Custom Folders Availability",
-    "relevanceDate": null,
-    "relevanceEvent": null,
-    "createdAt": "2025-07-17T23:58:10.416Z",
-    "folder": "Folder Management",
-    "priority": "3",
-    "summary": "• There are currently no custom folders available for organization. • Users may need to create new folders for better management. • Consider the importance of folder structure in workflow efficiency.",
+    "summary": [
+      "• Heippådeg is a term that may require further context for clarity.",
+      "• It is important to understand the meaning and usage of unfamiliar terms.",
+      "• Researching the term can provide better insights and understanding."
+    ],
     "tags": [],
     "actionRequired": false,
     "isProcessed": false,
@@ -38,42 +23,19 @@
     "urgencyLevel": "low"
   },
   {
-    "id": "1752796814270wgtetkhdo",
-    "content": "This tip should only be visible when logged in",
-    "url": "",
-    "title": "Visibility of Tips",
-    "relevanceDate": null,
-    "relevanceEvent": null,
-    "createdAt": "2025-07-18T00:00:14.270Z",
-    "folder": "User Access",
-    "priority": "5",
-    "summary": [
-      "• This tip is restricted to logged-in users only.",
-      "• Ensure you are logged in to access this information.",
-      "• Check your login status for full access."
-    ],
-    "tags": [],
-    "actionRequired": false,
-    "isProcessed": false,
-    "aiProcessed": true,
-    "userContext": "",
-    "needsMoreInfo": false,
-    "urgencyLevel": "medium"
-  },
-  {
-    "id": "1752796816304mw81ncz8s",
+    "id": "1752796900676ocj9o769y",
     "content": "No custom folders available",
     "url": "",
-    "title": "Custom Folder Availability",
+    "title": "Folder Availability Notice",
     "relevanceDate": null,
     "relevanceEvent": null,
-    "createdAt": "2025-07-18T00:00:16.304Z",
-    "folder": "Folder Management",
-    "priority": "3",
+    "createdAt": "2025-07-18T00:01:40.676Z",
+    "folder": "System Notifications",
+    "priority": "6",
     "summary": [
       "• There are currently no custom folders available for use.",
-      "• Users may need to rely on default folders.",
-      "• Consider requesting custom folder features if needed."
+      "• Users may need to create new folders for better organization.",
+      "• Consider the importance of folder structure in managing content."
     ],
     "tags": [],
     "actionRequired": false,
@@ -81,6 +43,6 @@
     "aiProcessed": true,
     "userContext": "",
     "needsMoreInfo": false,
-    "urgencyLevel": "low"
+    "urgencyLevel": "medium"
   }
 ]

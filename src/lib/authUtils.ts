@@ -10,7 +10,8 @@ let cert: any = null;
 let firebaseAdminInitialized = false;
 
 export function isDemoMode(): boolean {
-  // Check if we're in demo mode (no Firebase Admin config or initialization failed)
+  // Only return true if Firebase Admin is not configured at all
+  // This completely disables demo mode when Firebase is set up
   return !process.env.FIREBASE_PROJECT_ID || 
          !process.env.FIREBASE_CLIENT_EMAIL || 
          !process.env.FIREBASE_PRIVATE_KEY ||

@@ -12,26 +12,22 @@ const openai = new OpenAI({
 
 export async function GET(request: NextRequest) {
   try {
-    let tips: Tip[] = [];
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        tips = await firestoreService.getAllTips(userId);
-      } catch (error) {
-        console.error('Error fetching from Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return empty array instead
-        return NextResponse.json([]);
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      tips = await tipsService.getAllTips();
+    if (!userId) {
+      // No authenticated user - return empty array
+      return NextResponse.json([]);
     }
     
-    return NextResponse.json(tips);
+    // Use Firestore for authenticated users
+    try {
+      const tips = await firestoreService.getAllTips(userId);
+      return NextResponse.json(tips);
+    } catch (error) {
+      console.error('Error fetching from Firestore:', error);
+      return NextResponse.json({ error: 'Failed to fetch tips' }, { status: 500 });
+    }
   } catch (error) {
     console.error('Error fetching tips:', error);
     return NextResponse.json({ error: 'Failed to fetch tips' }, { status: 500 });
@@ -45,30 +41,23 @@ export async function POST(request: NextRequest) {
     // Parse multiple tips from content
     const tips = await parseMultipleTips(content, selectedFolder);
 
-    // Save all tips
-    const savedTips = [];
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        for (const tip of tips) {
-          const savedTip = await firestoreService.addTip(userId, tip);
-          savedTips.push(savedTip);
-        }
-      } catch (error) {
-        console.error('Error saving to Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return error instead
-        return NextResponse.json({ error: 'Failed to save to Firestore' }, { status: 500 });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
+    if (!userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Save all tips to Firestore
+    const savedTips = [];
+    try {
       for (const tip of tips) {
-        await tipsService.addTip(tip);
-        savedTips.push(tip);
+        const savedTip = await firestoreService.addTip(userId, tip);
+        savedTips.push(savedTip);
       }
+    } catch (error) {
+      console.error('Error saving to Firestore:', error);
+      return NextResponse.json({ error: 'Failed to save to Firestore' }, { status: 500 });
     }
 
     return NextResponse.json({

@@ -130,7 +130,7 @@ export default function Home() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="text-center">
                 <p className="text-blue-800 text-sm mb-3">
-                  You're currently in demo mode. Create an account to save your tips permanently and access them from anywhere.
+                  You need to create an account to use OrganAIze. All your tips will be saved securely and accessible from anywhere.
                 </p>
                 <Link
                   href="/login"

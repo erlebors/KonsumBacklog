@@ -5,26 +5,27 @@ import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
 
 export async function GET(request: NextRequest) {
   try {
-    let tips;
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        tips = await firestoreService.getAllTips(userId);
-      } catch (error) {
-        console.error('Error fetching from Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return empty notifications instead
-        return NextResponse.json({ 
-          notifications: [],
-          count: 0
-        });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      tips = await tipsService.getAllTips();
+    if (!userId) {
+      // No authenticated user - return empty notifications
+      return NextResponse.json({ 
+        notifications: [],
+        count: 0
+      });
+    }
+    
+    // Use Firestore for authenticated users
+    let tips;
+    try {
+      tips = await firestoreService.getAllTips(userId);
+    } catch (error) {
+      console.error('Error fetching from Firestore:', error);
+      return NextResponse.json({ 
+        notifications: [],
+        count: 0
+      });
     }
     
     const today = new Date();

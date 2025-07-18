@@ -5,26 +5,22 @@ import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
 
 export async function GET(request: NextRequest) {
   try {
-    let folders;
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        folders = await firestoreService.getAllFolders(userId);
-      } catch (error) {
-        console.error('Error fetching from Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return empty array instead
-        return NextResponse.json([]);
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      folders = await foldersService.getAllFolders();
+    if (!userId) {
+      // No authenticated user - return empty array
+      return NextResponse.json([]);
     }
     
-    return NextResponse.json(folders);
+    // Use Firestore for authenticated users
+    try {
+      const folders = await firestoreService.getAllFolders(userId);
+      return NextResponse.json(folders);
+    } catch (error) {
+      console.error('Error fetching from Firestore:', error);
+      return NextResponse.json({ error: 'Failed to fetch folders' }, { status: 500 });
+    }
   } catch (error) {
     console.error('Error fetching folders:', error);
     return NextResponse.json({ error: 'Failed to fetch folders' }, { status: 500 });
@@ -39,31 +35,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
-    let folder;
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        folder = await firestoreService.addFolder(userId, {
-          name: name.trim(),
-          description: description?.trim(),
-          color: color || '#3B82F6', // Default blue color
-        });
-      } catch (error) {
-        console.error('Error saving to Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return error instead
-        return NextResponse.json({ error: 'Failed to save to Firestore' }, { status: 500 });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      folder = await foldersService.addFolder({
+    if (!userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Use Firestore for authenticated users
+    let folder;
+    try {
+      folder = await firestoreService.addFolder(userId, {
         name: name.trim(),
         description: description?.trim(),
         color: color || '#3B82F6', // Default blue color
       });
+    } catch (error) {
+      console.error('Error saving to Firestore:', error);
+      return NextResponse.json({ error: 'Failed to save to Firestore' }, { status: 500 });
     }
 
     return NextResponse.json(folder);
@@ -85,31 +74,24 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
-    let folder;
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        folder = await firestoreService.updateFolder(userId, id, {
-          name: name.trim(),
-          description: description?.trim(),
-          color,
-        });
-      } catch (error) {
-        console.error('Error updating in Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return error instead
-        return NextResponse.json({ error: 'Failed to update in Firestore' }, { status: 500 });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      folder = await foldersService.updateFolder(id, {
+    if (!userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Use Firestore for authenticated users
+    let folder;
+    try {
+      folder = await firestoreService.updateFolder(userId, id, {
         name: name.trim(),
         description: description?.trim(),
         color,
       });
+    } catch (error) {
+      console.error('Error updating in Firestore:', error);
+      return NextResponse.json({ error: 'Failed to update in Firestore' }, { status: 500 });
     }
 
     if (!folder) {
@@ -132,23 +114,20 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
     }
 
-    let success;
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        success = await firestoreService.deleteFolder(userId, id);
-      } catch (error) {
-        console.error('Error deleting from Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return error instead
-        return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      success = await foldersService.deleteFolder(id);
+    if (!userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Use Firestore for authenticated users
+    let success;
+    try {
+      success = await firestoreService.deleteFolder(userId, id);
+    } catch (error) {
+      console.error('Error deleting from Firestore:', error);
+      return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
     }
     
     if (!success) {

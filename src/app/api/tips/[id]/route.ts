@@ -11,23 +11,20 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     
-    let updatedTip;
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        updatedTip = await firestoreService.updateTip(userId, id, body);
-      } catch (error) {
-        console.error('Error updating in Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return error instead
-        return NextResponse.json({ error: 'Failed to update in Firestore' }, { status: 500 });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      updatedTip = await tipsService.updateTip(id, body);
+    if (!userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    
+    // Use Firestore for authenticated users
+    let updatedTip;
+    try {
+      updatedTip = await firestoreService.updateTip(userId, id, body);
+    } catch (error) {
+      console.error('Error updating in Firestore:', error);
+      return NextResponse.json({ error: 'Failed to update in Firestore' }, { status: 500 });
     }
     
     if (!updatedTip) {
@@ -57,23 +54,20 @@ export async function DELETE(
   try {
     const { id } = await params;
     
-    let success;
-    
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        success = await firestoreService.deleteTip(userId, id);
-      } catch (error) {
-        console.error('Error deleting from Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return error instead
-        return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      success = await tipsService.deleteTip(id);
+    if (!userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    
+    // Use Firestore for authenticated users
+    let success;
+    try {
+      success = await firestoreService.deleteTip(userId, id);
+    } catch (error) {
+      console.error('Error deleting from Firestore:', error);
+      return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
     }
     
     if (!success) {

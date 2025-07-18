@@ -33,21 +33,20 @@ export async function POST(request: NextRequest) {
     // Get custom folder names for AI categorization
     let customFolders: string[];
     
-    // Try to get authenticated user first
+    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
+    if (!userId) {
+      // No authenticated user - use empty array for folders
+      customFolders = [];
+    } else {
+      // Use Firestore for authenticated users
       try {
         customFolders = await firestoreService.getFolderNames(userId);
       } catch (error) {
         console.error('Error fetching from Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - use empty array instead
         customFolders = [];
       }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      customFolders = await foldersService.getFolderNames();
     }
     
     const folderList = customFolders.length > 0 
