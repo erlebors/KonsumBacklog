@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { foldersService } from '@/lib/foldersService';
 import { firestoreService } from '@/lib/firestoreService';
-import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
+import { getCurrentUser } from '@/lib/authUtils';
 
 export async function GET(request: NextRequest) {
   try {

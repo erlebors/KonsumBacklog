@@ -54,28 +54,29 @@ class FirestoreService {
   }
 
   // Convert Firestore document to Tip interface
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private docToTip(doc: any): Tip {
     const data = doc.data();
     return {
       id: doc.id,
-      content: data.content || '',
-      url: data.url || '',
-      title: data.title || '',
-      relevanceDate: data.relevanceDate || null,
-      relevanceEvent: data.relevanceEvent || null,
-      createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || new Date().toISOString(),
-      folder: data.folder || 'General Tips',
-      priority: data.priority || '5',
-      summary: data.summary || '',
-      tags: data.tags || [],
-      actionRequired: data.actionRequired || false,
-      estimatedTime: data.estimatedTime || '',
-      isProcessed: data.isProcessed || false,
-      aiProcessed: data.aiProcessed || false,
-      aiError: data.aiError || '',
-      userContext: data.userContext || '',
-      needsMoreInfo: data.needsMoreInfo || false,
-      urgencyLevel: data.urgencyLevel || 'medium'
+      content: data?.content || '',
+      url: data?.url || '',
+      title: data?.title || '',
+      relevanceDate: data?.relevanceDate || null,
+      relevanceEvent: data?.relevanceEvent || null,
+      createdAt: data?.createdAt?.toDate?.()?.toISOString() || data?.createdAt || new Date().toISOString(),
+      folder: data?.folder || 'General Tips',
+      priority: data?.priority || '5',
+      summary: data?.summary || '',
+      tags: data?.tags || [],
+      actionRequired: data?.actionRequired || false,
+      estimatedTime: data?.estimatedTime || '',
+      isProcessed: data?.isProcessed || false,
+      aiProcessed: data?.aiProcessed || false,
+      aiError: data?.aiError || '',
+      userContext: data?.userContext || '',
+      needsMoreInfo: data?.needsMoreInfo || false,
+      urgencyLevel: data?.urgencyLevel || 'medium'
     };
   }
 
@@ -104,6 +105,7 @@ class FirestoreService {
   }
 
   // Convert Firestore document to Folder interface
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private docToFolder(doc: any): Folder {
     const data = doc.data();
     return {
@@ -165,6 +167,7 @@ class FirestoreService {
   async updateTip(userId: string, tipId: string, updates: Partial<Tip>): Promise<void> {
     try {
       const tipRef = doc(this.getTipsCollection(userId), tipId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {};
       
       // Only include fields that are being updated
@@ -233,6 +236,7 @@ class FirestoreService {
   async updateFolder(userId: string, folderId: string, updates: Partial<Folder>): Promise<Folder | null> {
     try {
       const folderRef = doc(this.getFoldersCollection(userId), folderId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {
         ...updates,
         updatedAt: serverTimestamp()

@@ -5,7 +5,6 @@ import {
   ArrowLeft, 
   Folder, 
   Clock, 
-  Plus, 
   Edit3, 
   CheckCircle, 
   Trash2,
@@ -742,7 +741,7 @@ export default function ReviewPage() {
             </div>
             <div className="p-6">
               <p className="text-gray-600 mb-4">
-                Combine "{combineData.sourceFolder}" and "{combineData.targetFolder}" into a new folder.
+                Combine &quot;{combineData.sourceFolder}&quot; and &quot;{combineData.targetFolder}&quot; into a new folder.
               </p>
               <input
                 type="text"
@@ -785,33 +784,4 @@ export default function ReviewPage() {
       )}
     </div>
   );
-}
-
-// Helper function to generate short titles
-const generateShortTitle = (text: string): string => {
-  if (!text) return 'Untitled';
-  
-  // Clean up the text
-  const cleaned = text
-    .replace(/[^\w\s]/g, ' ') // Remove special characters
-    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-    .replace(/\s+(on my way to|while traveling to|during trip to|when going to|en route to|heading to|traveling to|going to|visiting|stopping by|passing through|driving through|flying to|taking train to|taking bus to|walking to|cycling to|sailing to|flying over|passing by|near|around|in|at|to|for|about|regarding|concerning|related to|connected to|associated with|linked to|tied to|bound to|destined for|headed for|aimed at|targeted at|focused on|centered on|based on|built on|founded on|established on|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for|geared toward|oriented toward|directed toward|pointed toward|aimed toward|targeted toward|focused toward|centered toward|based toward|built toward|founded toward|established toward|created toward|designed toward|intended toward|meant toward|planned toward|scheduled toward|booked toward|reserved toward|set toward|arranged toward|organized toward|prepared toward|ready toward|geared for|oriented for|directed for|pointed for|aimed for|targeted for|focused for|centered for|based for|built for|founded for|established for|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for)\s+/i, ' ')
-      .trim();
-
-    // Extract key words (capitalize first letter of each word)
-    const words = cleaned.split(/\s+/).filter(word => word.length > 0);
-    
-    if (words.length === 0) return 'Untitled';
-    
-    // If it's just one or two words, use as is
-    if (words.length <= 2) {
-      return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    }
-    
-    // Take first 3 words and capitalize them
-    const titleWords = words.slice(0, 3).map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    );
-    
-    return titleWords.join(' ');
-}; 
+} 

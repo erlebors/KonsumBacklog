@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { foldersService } from '@/lib/foldersService';
 import { firestoreService } from '@/lib/firestoreService';
-import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
+import { getCurrentUser } from '@/lib/authUtils';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

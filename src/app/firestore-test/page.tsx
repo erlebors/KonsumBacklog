@@ -12,8 +12,7 @@ import {
   Folder,
   Tag,
   Clock,
-  ExternalLink,
-  Edit3
+  ExternalLink
 } from 'lucide-react';
 import { firestoreService, Tip } from '@/lib/firestoreService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,7 +34,7 @@ export default function FirestoreTestPage() {
     if (user) {
       fetchTips();
     }
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const testConnection = async () => {
     setConnectionStatus('testing');
@@ -49,6 +48,7 @@ export default function FirestoreTestPage() {
       }
     } catch (error) {
       setConnectionStatus('error');
+      console.error('Firestore connection failed:', error);
       toast.error('Firestore connection failed!');
     }
   };

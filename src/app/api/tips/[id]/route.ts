@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { tipsService } from '@/lib/tipsService';
 import { firestoreService } from '@/lib/firestoreService';
-import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
+import { getCurrentUser } from '@/lib/authUtils';
 
 export async function PATCH(
   request: NextRequest,
@@ -19,25 +18,28 @@ export async function PATCH(
     }
     
     // Use Firestore for authenticated users
-    let updatedTip;
     try {
-      updatedTip = await firestoreService.updateTip(userId, id, body);
+      await firestoreService.updateTip(userId, id, body);
+      
+      // Fetch the updated tip to return it
+      const tips = await firestoreService.getAllTips(userId);
+      const updatedTip = tips.find(tip => tip.id === id);
+      
+      if (!updatedTip) {
+        return NextResponse.json(
+          { error: 'Tip not found' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ 
+        message: 'Tip updated successfully',
+        tip: updatedTip
+      });
     } catch (error) {
       console.error('Error updating in Firestore:', error);
       return NextResponse.json({ error: 'Failed to update in Firestore' }, { status: 500 });
     }
-    
-    if (!updatedTip) {
-      return NextResponse.json(
-        { error: 'Tip not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ 
-      message: 'Tip updated successfully',
-      tip: updatedTip
-    });
   } catch (error) {
     console.error('Error updating tip:', error);
     return NextResponse.json(
@@ -62,24 +64,15 @@ export async function DELETE(
     }
     
     // Use Firestore for authenticated users
-    let success;
     try {
-      success = await firestoreService.deleteTip(userId, id);
+      await firestoreService.deleteTip(userId, id);
+      return NextResponse.json({ 
+        message: 'Tip deleted successfully'
+      });
     } catch (error) {
       console.error('Error deleting from Firestore:', error);
       return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
     }
-    
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Tip not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ 
-      message: 'Tip deleted successfully'
-    });
   } catch (error) {
     console.error('Error deleting tip:', error);
     return NextResponse.json(

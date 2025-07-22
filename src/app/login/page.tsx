@@ -29,9 +29,10 @@ export default function LoginPage() {
         toast.success('Welcome back!');
       }
       router.push('/');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Auth error:', error);
-      toast.error(error.message || 'Authentication failed');
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -43,9 +44,10 @@ export default function LoginPage() {
       await signInWithGoogle();
       toast.success('Welcome!');
       router.push('/');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Google auth error:', error);
-      toast.error(error.message || 'Google authentication failed');
+      const errorMessage = error instanceof Error ? error.message : 'Google authentication failed';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
