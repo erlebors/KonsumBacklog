@@ -98,6 +98,11 @@ export default function ReviewPage() {
       if (response.ok) {
         const data = await response.json();
         setTips(data || []);
+        
+        // Auto-expand URL previews for tips that have URLs
+        const tipsWithUrls = (data || []).filter((tip: Tip) => tip.url && tip.url.trim());
+        const urlPreviewIds = new Set<string>(tipsWithUrls.map((tip: Tip) => tip.id));
+        setExpandedUrlPreviews(urlPreviewIds);
       }
     } catch (error) {
       console.error('Error fetching tips:', error);
@@ -223,7 +228,7 @@ export default function ReviewPage() {
     return Object.entries(folders).map(([name, folderTips]) => {
       // Create subfolders for each tip
       const subFolders: TipSubFolder[] = folderTips.map(tip => {
-        // Get title from tip.title, URL metadata, or use content
+        // Get title from tip.title, URL metadata, or use a generic name
         let subFolderName = 'Untitled';
         
         if (tip.title) {
@@ -234,10 +239,10 @@ export default function ReviewPage() {
             const url = new URL(tip.url);
             subFolderName = url.hostname.replace('www.', '');
           } catch {
-            subFolderName = generateShortTitle(tip.content);
+            subFolderName = 'Untitled';
           }
-        } else if (tip.content) {
-          subFolderName = generateShortTitle(tip.content);
+        } else {
+          subFolderName = 'Untitled';
         }
         
         return {
@@ -612,13 +617,6 @@ export default function ReviewPage() {
                                 )}
                               </div>
                             )}
-
-                            {/* Tip Content */}
-                            <div className="mb-4">
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                                {subFolder.tip.content}
-                              </p>
-                            </div>
 
                             {/* Tip Metadata */}
                             <div className="space-y-2 text-xs text-gray-500">

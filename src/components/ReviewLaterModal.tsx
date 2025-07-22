@@ -246,11 +246,6 @@ export default function ReviewLaterModal({ isOpen, onClose }: ReviewLaterModalPr
                           <p className="text-sm text-blue-900 font-medium">{tip.summary}</p>
                         </div>
                       )}
-
-                      {/* Content */}
-                      {tip.content && (
-                        <p className="text-gray-900 mb-2">{tip.content}</p>
-                      )}
                       
                       {/* URL */}
                       {tip.url && (
