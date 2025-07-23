@@ -14,7 +14,8 @@ import {
   ChevronDown,
   ChevronRight,
   Settings,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -72,6 +73,7 @@ export default function ReviewPage() {
   const [expandedSubFolders, setExpandedSubFolders] = useState<Set<string>>(new Set());
   const [expandedUrlPreviews, setExpandedUrlPreviews] = useState<Set<string>>(new Set());
   const [showFolderModal, setShowFolderModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Drag and drop state
   const [draggedFolder, setDraggedFolder] = useState<string | null>(null);
@@ -195,11 +197,43 @@ export default function ReviewPage() {
   };
 
   const getFilteredTips = () => {
+    let filteredTips = tips;
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filteredTips = filteredTips.filter(tip => {
+        // Search in folder name
+        const folderMatch = typeof tip.folder === 'string' && tip.folder.toLowerCase().includes(query);
+        
+        // Search in tip title
+        const titleMatch = typeof tip.title === 'string' && tip.title.toLowerCase().includes(query);
+        
+        // Search in tip content
+        const contentMatch = typeof tip.content === 'string' && tip.content.toLowerCase().includes(query);
+        
+        // Search in tip summary
+        const summaryMatch = typeof tip.summary === 'string' && tip.summary.toLowerCase().includes(query);
+        
+        // Search in user context
+        const contextMatch = typeof tip.userContext === 'string' && tip.userContext.toLowerCase().includes(query);
+        
+        // Search in URL
+        const urlMatch = typeof tip.url === 'string' && tip.url.toLowerCase().includes(query);
+        
+        // Search in relevance event
+        const eventMatch = typeof tip.relevanceEvent === 'string' && tip.relevanceEvent.toLowerCase().includes(query);
+        
+        return folderMatch || titleMatch || contentMatch || summaryMatch || contextMatch || urlMatch || eventMatch;
+      });
+    }
+    
+    // Apply status filter
     switch (filter) {
       case 'completed':
-        return tips.filter(tip => tip.isProcessed);
+        return filteredTips.filter(tip => tip.isProcessed);
       default:
-        return tips.filter(tip => !tip.isProcessed); // Only show active tips in "All" view
+        return filteredTips.filter(tip => !tip.isProcessed); // Only show active tips in "All" view
     }
   };
 
@@ -334,6 +368,25 @@ export default function ReviewPage() {
     return selectedWords.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
+  // Helper function to highlight search matches
+  const highlightSearchMatch = (text: string | any, query: string) => {
+    if (!query.trim() || !text) return text;
+    
+    // Convert to string if it's not already
+    const textString = typeof text === 'string' ? text : String(text);
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = textString.split(regex);
+    
+    return parts.map((part, index) => 
+      regex.test(part) ? (
+        <mark key={index} className="bg-yellow-200 rounded">
+          {part}
+        </mark>
+      ) : part
+    );
+  };
+
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, folderName: string) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -434,22 +487,36 @@ export default function ReviewPage() {
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 min-w-0 flex-1">
               <Link 
                 href="/"
-                className="text-gray-500 hover:text-gray-700 transition-colors"
+                className="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
               >
                 <ArrowLeft className="w-6 h-6" />
               </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Review Tips</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">Review Tips</h1>
             </div>
             
-            <div className="flex items-center space-x-4">
+            {/* Search Bar */}
+            <div className="hidden sm:flex flex-1 max-w-md mx-4">
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search your saved content..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
               {/* Filter Toggle */}
-              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+              <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setFilter('all')}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                     filter === 'all' 
                       ? 'bg-white text-gray-900 shadow-sm' 
                       : 'text-gray-600 hover:text-gray-900'
@@ -459,7 +526,7 @@ export default function ReviewPage() {
                 </button>
                 <button
                   onClick={() => setFilter('completed')}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                     filter === 'completed' 
                       ? 'bg-white text-gray-900 shadow-sm' 
                       : 'text-gray-600 hover:text-gray-900'
@@ -472,30 +539,44 @@ export default function ReviewPage() {
               {/* Folder Management */}
               <button
                 onClick={() => setShowFolderModal(true)}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center space-x-1 sm:space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <Settings className="w-4 h-4" />
-                <span className="text-sm">Folders</span>
+                <span className="text-xs sm:text-sm hidden sm:inline">Folders</span>
               </button>
+            </div>
+          </div>
+          
+          {/* Mobile Search Bar */}
+          <div className="sm:hidden pb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search your saved content..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {folderGroups.length === 0 ? (
-          <div className="text-center py-12">
-            <Clock className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <div className="text-center py-8 sm:py-12">
+            <Clock className="w-12 sm:w-16 h-12 sm:h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No tips to review</h3>
             <p className="text-gray-600">All tips have been processed or there are no tips matching the current filter.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {folderGroups.map((group) => (
               <div 
                 key={group.name} 
-                className={`bg-white rounded-lg shadow-sm border ${expandedFolders.has(group.name) ? '' : 'h-[120px]'} ${
+                className={`bg-white rounded-lg shadow-sm border ${
                   draggedFolder === group.name ? 'opacity-50' : ''
                 } ${
                   dragOverFolder === group.name ? 'ring-2 ring-blue-500 bg-blue-50' : ''
@@ -507,19 +588,21 @@ export default function ReviewPage() {
                 onDrop={(e) => handleDrop(e, group.name)}
               >
                 {/* Folder Header */}
-                <div className="p-4 border-b border-gray-200">
+                <div className="p-3 sm:p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Folder className="w-5 h-5 text-gray-500" />
-                      <h3 className="font-medium text-gray-900">{group.name}</h3>
-                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
+                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                      <Folder className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
+                      <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">
+                        {searchQuery.trim() ? highlightSearchMatch(group.name, searchQuery) : group.name}
+                      </h3>
+                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full flex-shrink-0">
                         {group.totalCount}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1 flex-shrink-0">
                       <button
                         onClick={() => toggleFolder(group.name)}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-gray-400 hover:text-gray-600 transition-colors p-1"
                       >
                         {expandedFolders.has(group.name) ? (
                           <ChevronDown className="w-4 h-4" />
@@ -533,49 +616,49 @@ export default function ReviewPage() {
 
                 {/* Folder Content */}
                 {expandedFolders.has(group.name) && (
-                  <div className="p-4 space-y-2">
+                  <div className="p-3 sm:p-4 space-y-2">
                     {group.subFolders?.map((subFolder) => (
                       <div 
                         key={subFolder.tip.id}
                         className="border border-gray-200 rounded-md overflow-hidden"
                       >
                         {/* Subfolder Header */}
-                        <div className="p-3 bg-gray-50 border-b border-gray-200">
+                        <div className="p-2 sm:p-3 bg-gray-50 border-b border-gray-200">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <h4 className="font-medium text-sm text-gray-900">
-                                {subFolder.name}
+                            <div className="flex items-center space-x-2 min-w-0 flex-1">
+                              <h4 className="font-medium text-xs sm:text-sm text-gray-900 truncate">
+                                {searchQuery.trim() ? highlightSearchMatch(subFolder.name, searchQuery) : subFolder.name}
                               </h4>
                               {subFolder.tip.isProcessed && (
-                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 flex-shrink-0" />
                               )}
                             </div>
-                            <div className="flex items-center space-x-1">
+                            <div className="flex items-center space-x-1 flex-shrink-0">
                               {/* Action Buttons */}
                               {!subFolder.tip.isProcessed && (
                                 <button
                                   onClick={() => markAsProcessed(subFolder.tip.id)}
-                                  className="text-green-600 hover:text-green-700 transition-colors"
+                                  className="text-green-600 hover:text-green-700 transition-colors p-1"
                                   title="Mark as processed"
                                 >
-                                  <CheckCircle className="w-4 h-4" />
+                                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
                                 </button>
                               )}
                               <button
                                 onClick={() => deleteTip(subFolder.tip.id)}
-                                className="text-red-600 hover:text-red-700 transition-colors"
+                                className="text-red-600 hover:text-red-700 transition-colors p-1"
                                 title="Delete tip"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                               </button>
                               <button
                                 onClick={() => toggleSubFolder(subFolder.tip.id)}
-                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
                               >
                                 {expandedSubFolders.has(subFolder.tip.id) ? (
-                                  <ChevronDown className="w-4 h-4" />
+                                  <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
                                 ) : (
-                                  <ChevronRight className="w-4 h-4" />
+                                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
                                 )}
                               </button>
                             </div>
@@ -584,18 +667,20 @@ export default function ReviewPage() {
 
                         {/* Subfolder Content */}
                         {expandedSubFolders.has(subFolder.tip.id) && (
-                          <div className="p-4 border-t border-gray-200">
+                          <div className="p-3 sm:p-4 border-t border-gray-200">
                             {subFolder.tip.summary && (
-                              <div className="mb-4 p-3 bg-blue-50 rounded-md">
+                              <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-blue-50 rounded-md">
                                 <div className="flex items-center space-x-1 mb-1">
                                   <Brain className="w-3 h-3 text-blue-600" />
-                                  <span className="text-sm font-medium text-blue-900">AI Summary</span>
+                                  <span className="text-xs sm:text-sm font-medium text-blue-900">AI Summary</span>
                                 </div>
-                                <ul className="text-sm text-blue-800 space-y-1">
+                                <ul className="text-xs sm:text-sm text-blue-800 space-y-1">
                                   {String(subFolder.tip.summary).split('•').filter(point => point.trim()).map((point, index) => (
                                     <li key={index} className="flex items-start">
                                       <span className="mr-2 text-blue-600">•</span>
-                                      <span>{point.trim()}</span>
+                                      <span>
+                                        {searchQuery.trim() ? highlightSearchMatch(point.trim(), searchQuery) : point.trim()}
+                                      </span>
                                     </li>
                                   ))}
                                 </ul>
@@ -604,10 +689,10 @@ export default function ReviewPage() {
 
                             {/* URL Preview */}
                             {subFolder.tip.url && (
-                              <div className="mb-4">
+                              <div className="mb-3 sm:mb-4">
                                 <button
                                   onClick={() => toggleUrlPreview(subFolder.tip.id)}
-                                  className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 mb-2"
+                                  className="flex items-center space-x-2 text-xs sm:text-sm text-blue-600 hover:text-blue-700 mb-2"
                                 >
                                   <span>{expandedUrlPreviews.has(subFolder.tip.id) ? 'Hide' : 'Show'} URL Preview</span>
                                 </button>
@@ -618,7 +703,7 @@ export default function ReviewPage() {
                             )}
 
                             {/* Tip Metadata */}
-                            <div className="space-y-2 text-xs text-gray-500">
+                            <div className="space-y-1 sm:space-y-2 text-xs text-gray-500">
                               {subFolder.tip.relevanceDate && (
                                 <div className="flex items-center space-x-1">
                                   <Calendar className="w-3 h-3" />
@@ -639,12 +724,14 @@ export default function ReviewPage() {
 
                             {/* User Context */}
                             {subFolder.tip.userContext && (
-                              <div className="mt-4 p-3 bg-yellow-50 rounded-md">
+                              <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-yellow-50 rounded-md">
                                 <div className="flex items-center space-x-1 mb-1">
                                   <Info className="w-3 h-3 text-yellow-600" />
-                                  <span className="text-sm font-medium text-yellow-900">Your Notes</span>
+                                  <span className="text-xs sm:text-sm font-medium text-yellow-900">Your Notes</span>
                                 </div>
-                                <p className="text-sm text-yellow-800">{subFolder.tip.userContext}</p>
+                                <p className="text-xs sm:text-sm text-yellow-800">
+                                  {searchQuery.trim() ? highlightSearchMatch(subFolder.tip.userContext, searchQuery) : subFolder.tip.userContext}
+                                </p>
                               </div>
                             )}
 
@@ -655,7 +742,7 @@ export default function ReviewPage() {
                                   setSelectedTip(subFolder.tip);
                                   setShowContextModal(true);
                                 }}
-                                className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-1"
+                                className="mt-3 sm:mt-4 w-full text-xs sm:text-sm text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-1"
                               >
                                 <Edit3 className="w-3 h-3" />
                                 <span>Add notes</span>
