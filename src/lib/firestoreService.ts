@@ -309,6 +309,50 @@ class FirestoreService {
     }
   }
 
+  // Create test folders
+  async createTestFolders(userId: string): Promise<Folder[]> {
+    const testFolders: Omit<Folder, 'id' | 'createdAt' | 'updatedAt'>[] = [
+      {
+        name: 'Programming',
+        description: 'Programming tips and resources',
+        color: '#3B82F6'
+      },
+      {
+        name: 'UI/UX',
+        description: 'User interface and experience design',
+        color: '#EF4444'
+      },
+      {
+        name: 'Architecture',
+        description: 'System architecture and design patterns',
+        color: '#10B981'
+      },
+      {
+        name: 'Backend',
+        description: 'Backend development and APIs',
+        color: '#F59E0B'
+      },
+      {
+        name: 'General Tips',
+        description: 'General tips and miscellaneous items',
+        color: '#8B5CF6'
+      }
+    ];
+
+    const createdFolders: Folder[] = [];
+    
+    for (const testFolder of testFolders) {
+      try {
+        const createdFolder = await this.addFolder(userId, testFolder);
+        createdFolders.push(createdFolder);
+      } catch (error) {
+        console.error('Error creating test folder:', error);
+      }
+    }
+
+    return createdFolders;
+  }
+
   // Create test data
   async createTestData(userId: string): Promise<Tip[]> {
     const testTips: Omit<Tip, 'id'>[] = [

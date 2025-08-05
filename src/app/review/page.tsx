@@ -11,9 +11,6 @@ import {
   Calendar,
   Brain,
   Info,
-  ChevronDown,
-  ChevronRight,
-  Settings,
   X,
   Search
 } from 'lucide-react';
@@ -21,7 +18,6 @@ import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import UrlPreview from '@/components/UrlPreview';
-import FolderModal from '@/components/FolderModal';
 import { createAuthenticatedRequest } from '@/lib/clientAuth';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -47,21 +43,6 @@ interface Tip {
   urgencyLevel?: string;
 }
 
-interface FolderGroup {
-  name: string;
-  tips: Tip[];
-  urgentCount: number;
-  totalCount: number;
-  isExpanded?: boolean;
-  subFolders?: TipSubFolder[];
-}
-
-interface TipSubFolder {
-  name: string;
-  tip: Tip;
-  isExpanded: boolean;
-}
-
 export default function ReviewPage() {
   const [tips, setTips] = useState<Tip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,28 +53,45 @@ export default function ReviewPage() {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedSubFolders, setExpandedSubFolders] = useState<Set<string>>(new Set());
   const [expandedUrlPreviews, setExpandedUrlPreviews] = useState<Set<string>>(new Set());
-  const [showFolderModal, setShowFolderModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Drag and drop state
-  const [draggedFolder, setDraggedFolder] = useState<string | null>(null);
-  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
-  const [showCombineModal, setShowCombineModal] = useState(false);
-  const [combineData, setCombineData] = useState<{
-    sourceFolder: string;
-    targetFolder: string;
-    combinedTips: Tip[];
-  } | null>(null);
-  const [newFolderName, setNewFolderName] = useState('');
+  // Sidebar navigation state
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [availableFolders, setAvailableFolders] = useState<string[]>([]);
+  
+  // Folder management state
+  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+  const [newFolderData, setNewFolderData] = useState({
+    name: '',
+    description: '',
+    color: '#3B82F6'
+  });
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  
+  console.log('ReviewPage render - user:', user, 'authLoading:', authLoading, 'localLoading:', loading);
 
   useEffect(() => {
-    fetchTips();
-  }, [user]); // Refetch tips when user authentication state changes
+    console.log('ReviewPage useEffect - user:', user, 'authLoading:', authLoading);
+    if (user && !authLoading) {
+      console.log('User is authenticated, fetching data...');
+      fetchTips();
+      fetchAvailableFolders();
+    } else if (!user && !authLoading) {
+      console.log('User is not authenticated');
+    } else {
+      console.log('Still loading authentication state...');
+    }
+  }, [user, authLoading]); // Only fetch when user is authenticated and auth loading is complete
 
   const fetchTips = async () => {
+    if (!user) {
+      console.log('No user authenticated, skipping fetchTips');
+      return;
+    }
+    
     try {
+      setLoading(true);
       const requestOptions = await createAuthenticatedRequest('/api/tips');
       const response = await fetch('/api/tips', requestOptions);
       if (response.ok) {
@@ -113,12 +111,140 @@ export default function ReviewPage() {
     }
   };
 
+  const fetchAvailableFolders = async () => {
+    if (!user) {
+      console.log('No user authenticated, skipping fetchAvailableFolders');
+      return;
+    }
+    
+    try {
+      const requestOptions = await createAuthenticatedRequest('/api/folders/available');
+      const response = await fetch('/api/folders/available', requestOptions);
+      if (response.ok) {
+        const data = await response.json();
+        // Combine user folders and AI-generated folders
+        const userFolderNames = data.userFolders || [];
+        const aiGeneratedFolderNames = data.aiGeneratedFolders || [];
+        const allFolderNames = [...userFolderNames, ...aiGeneratedFolderNames];
+        setAvailableFolders(allFolderNames);
+      }
+    } catch (error) {
+      console.error('Error fetching folders:', error);
+    }
+  };
+
+  const createFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user) {
+      toast.error('Please sign in to create folders');
+      return;
+    }
+    
+    if (!newFolderData.name.trim()) {
+      toast.error('Folder name is required');
+      return;
+    }
+
+    try {
+      const requestOptions = await createAuthenticatedRequest('/api/folders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newFolderData),
+      });
+
+      const response = await fetch('/api/folders', requestOptions);
+
+      if (response.ok) {
+        toast.success('Folder created!');
+        setShowNewFolderModal(false);
+        setNewFolderData({ name: '', description: '', color: '#3B82F6' });
+        fetchAvailableFolders(); // Refresh the folder list
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create folder');
+      }
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      toast.error('Failed to create folder');
+    }
+  };
+
+  const deleteFolder = async (folderName: string) => {
+    if (!user) {
+      toast.error('Please sign in to delete folders');
+      return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete the folder "${folderName}"? This will move all tips in this folder to "General Tips".`)) {
+      return;
+    }
+
+    try {
+      // First, get all folders to find the folder ID
+      const requestOptions = await createAuthenticatedRequest('/api/folders');
+      const response = await fetch('/api/folders', requestOptions);
+      
+      if (response.ok) {
+        const folders = await response.json();
+        const folder = folders.find((f: any) => f.name === folderName);
+        
+        if (folder) {
+          // Delete the folder
+          const deleteRequestOptions = await createAuthenticatedRequest(`/api/folders`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id: folder.id }),
+          });
+          
+          const deleteResponse = await fetch('/api/folders', deleteRequestOptions);
+          
+          if (deleteResponse.ok) {
+            toast.success('Folder deleted!');
+            fetchAvailableFolders(); // Refresh the folder list
+            if (selectedFolder === folderName) {
+              setSelectedFolder(null); // Clear selection if deleted folder was selected
+            }
+          } else {
+            throw new Error('Failed to delete folder');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+      toast.error('Failed to delete folder');
+    }
+  };
+
+  const colorOptions = [
+    '#3B82F6', // Blue
+    '#EF4444', // Red
+    '#10B981', // Green
+    '#F59E0B', // Yellow
+    '#8B5CF6', // Purple
+    '#F97316', // Orange
+    '#06B6D4', // Cyan
+    '#EC4899', // Pink
+    '#84CC16', // Lime
+    '#6B7280', // Gray
+  ];
+
   const handleFoldersChange = () => {
-    // Refresh tips to show any changes in folder organization
+    // Refresh tips and folders to show any changes
     fetchTips();
+    fetchAvailableFolders();
   };
 
   const markAsProcessed = async (tipId: string) => {
+    if (!user) {
+      toast.error('Please sign in to mark tips as processed');
+      return;
+    }
+    
     try {
       const requestOptions = await createAuthenticatedRequest(`/api/tips/${tipId}`, {
         method: 'PATCH',
@@ -143,6 +269,11 @@ export default function ReviewPage() {
   };
 
   const deleteTip = async (tipId: string) => {
+    if (!user) {
+      toast.error('Please sign in to delete tips');
+      return;
+    }
+    
     if (!confirm('Are you sure you want to delete this tip?')) return;
 
     try {
@@ -163,6 +294,11 @@ export default function ReviewPage() {
   };
 
   const addContext = async (tipId: string, context: string) => {
+    if (!user) {
+      toast.error('Please sign in to add context to tips');
+      return;
+    }
+    
     try {
       const requestOptions = await createAuthenticatedRequest(`/api/tips/${tipId}`, {
         method: 'PATCH',
@@ -228,6 +364,11 @@ export default function ReviewPage() {
       });
     }
     
+    // Apply folder filter
+    if (selectedFolder) {
+      filteredTips = filteredTips.filter(tip => tip.folder === selectedFolder);
+    }
+    
     // Apply status filter
     switch (filter) {
       case 'completed':
@@ -235,137 +376,6 @@ export default function ReviewPage() {
       default:
         return filteredTips.filter(tip => !tip.isProcessed); // Only show active tips in "All" view
     }
-  };
-
-  const organizeByFolder = (tips: Tip[]): FolderGroup[] => {
-    const folders: { [key: string]: Tip[] } = {};
-    
-    tips.forEach(tip => {
-      // For completed tips, use their original folder name
-      if (tip.isProcessed) {
-        const folder = tip.folder || 'Uncategorized';
-        if (!folders[folder]) {
-          folders[folder] = [];
-        }
-        folders[folder].push(tip);
-      } else {
-        // For active tips, use their assigned folder
-        const folder = tip.folder || 'Uncategorized';
-        if (!folders[folder]) {
-          folders[folder] = [];
-        }
-        folders[folder].push(tip);
-      }
-    });
-
-    return Object.entries(folders).map(([name, folderTips]) => {
-      // Create subfolders for each tip
-      const subFolders: TipSubFolder[] = folderTips.map(tip => {
-        // Get title from tip.title, URL metadata, or use a generic name
-        let subFolderName = 'Untitled';
-        
-        if (tip.title) {
-          subFolderName = generateShortTitle(tip.title);
-        } else if (tip.url) {
-          // Try to extract title from URL or use domain
-          try {
-            const url = new URL(tip.url);
-            subFolderName = url.hostname.replace('www.', '');
-          } catch {
-            subFolderName = 'Untitled';
-          }
-        } else {
-          subFolderName = 'Untitled';
-        }
-        
-        return {
-          name: subFolderName,
-          tip: tip,
-          isExpanded: expandedSubFolders.has(tip.id)
-        };
-      });
-
-      return {
-        name,
-        tips: [], // No direct tips, only subfolders
-        urgentCount: 0, // No longer used
-        totalCount: folderTips.length,
-        isExpanded: expandedFolders.has(name),
-        subFolders: subFolders
-      };
-    }).sort((a, b) => {
-      // Sort folders alphabetically
-      return a.name.localeCompare(b.name);
-    });
-  };
-
-  const toggleFolder = (folderName: string) => {
-    const newExpanded = new Set(expandedFolders);
-    if (newExpanded.has(folderName)) {
-      newExpanded.delete(folderName);
-    } else {
-      newExpanded.add(folderName);
-    }
-    setExpandedFolders(newExpanded);
-  };
-
-  const toggleSubFolder = (tipId: string) => {
-    const newExpandedSubFolders = new Set(expandedSubFolders);
-    if (newExpandedSubFolders.has(tipId)) {
-      newExpandedSubFolders.delete(tipId);
-    } else {
-      newExpandedSubFolders.add(tipId);
-    }
-    setExpandedSubFolders(newExpandedSubFolders);
-  };
-
-  const toggleUrlPreview = (tipId: string) => {
-    const newExpandedUrlPreviews = new Set(expandedUrlPreviews);
-    if (newExpandedUrlPreviews.has(tipId)) {
-      newExpandedUrlPreviews.delete(tipId);
-    } else {
-      newExpandedUrlPreviews.add(tipId);
-    }
-    setExpandedUrlPreviews(newExpandedUrlPreviews);
-  };
-
-  // Helper function to generate shorter, more concise titles
-  const generateShortTitle = (text: string): string => {
-    if (!text) return 'Untitled';
-    
-    // Remove common prefixes and phrases
-    const cleaned = text
-      .toLowerCase()
-      .replace(/^(visit|go to|check out|see|explore|look at|read about|learn about|research|find|get|buy|order|book|schedule|plan|prepare for|work on|study|review|analyze|investigate|examine|consider|think about|remember to|don't forget to|make sure to|try to|attempt to|start|begin|continue|finish|complete|do|work on|focus on|concentrate on|spend time on|dedicate time to|allocate time for|set aside time for|make time for|find time for|take time to|spend time|invest time in|put time into|devote time to|commit time to|allocate|dedicate|devote|commit|invest|put|take|make|find|set|spend|focus|concentrate|work|start|begin|continue|finish|complete|do|try|attempt|remember|don't forget|make sure|think|consider|examine|investigate|analyze|review|study|plan|prepare|schedule|book|order|buy|get|find|research|learn|read|see|explore|look|check|go|visit)\s+/i, '')
-      .replace(/\s+(on my way to|while traveling to|during trip to|when going to|en route to|heading to|traveling to|going to|visiting|stopping by|passing through|driving through|flying to|taking train to|taking bus to|walking to|cycling to|sailing to|flying over|passing by|near|around|in|at|to|for|about|regarding|concerning|related to|connected to|associated with|linked to|tied to|bound to|destined for|headed for|aimed at|targeted at|focused on|centered on|based on|built on|founded on|established on|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for|geared toward|oriented toward|directed toward|pointed toward|aimed toward|targeted toward|focused toward|centered toward|based toward|built toward|founded toward|established toward|created toward|designed toward|intended toward|meant toward|planned toward|scheduled toward|booked toward|reserved toward|set toward|arranged toward|organized toward|prepared toward|ready toward|geared for|oriented for|directed for|pointed for|aimed for|targeted for|focused for|centered for|based for|built for|founded for|established for|created for|designed for|intended for|meant for|planned for|scheduled for|booked for|reserved for|set for|arranged for|organized for|prepared for|ready for)\s+/i, ' ')
-      .trim();
-
-    // Extract key words (capitalize first letter of each word)
-    const words = cleaned.split(/\s+/).filter(word => word.length > 0);
-    
-    if (words.length === 0) return 'Untitled';
-    
-    // If it's just one or two words, use as is
-    if (words.length <= 2) {
-      return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    }
-    
-    // For longer phrases, try to extract the most important part
-    // Look for location names, proper nouns, or key concepts
-    const importantWords = words.filter(word => 
-      word.length > 2 && 
-      !['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'down', 'out', 'off', 'over', 'under', 'through', 'during', 'before', 'after', 'while', 'since', 'until', 'unless', 'although', 'because', 'if', 'when', 'where', 'why', 'how', 'what', 'which', 'who', 'whom', 'whose', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'a', 'an'].includes(word)
-    );
-    
-    if (importantWords.length > 0) {
-      // Take up to 3 important words
-      const selectedWords = importantWords.slice(0, 3);
-      return selectedWords.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    }
-    
-    // Fallback: take first 2-3 words and capitalize
-    const selectedWords = words.slice(0, Math.min(3, words.length));
-    return selectedWords.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
   // Helper function to highlight search matches
@@ -387,95 +397,54 @@ export default function ReviewPage() {
     );
   };
 
-  // Drag and drop handlers
-  const handleDragStart = (e: React.DragEvent, folderName: string) => {
-    e.dataTransfer.effectAllowed = 'move';
-    setDraggedFolder(folderName);
-  };
-
-  const handleDragOver = (e: React.DragEvent, folderName: string) => {
-    e.preventDefault();
-    if (draggedFolder && draggedFolder !== folderName) {
-      setDragOverFolder(folderName);
+  const toggleUrlPreview = (tipId: string) => {
+    const newExpandedUrlPreviews = new Set(expandedUrlPreviews);
+    if (newExpandedUrlPreviews.has(tipId)) {
+      newExpandedUrlPreviews.delete(tipId);
+    } else {
+      newExpandedUrlPreviews.add(tipId);
     }
+    setExpandedUrlPreviews(newExpandedUrlPreviews);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOverFolder(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetFolder: string) => {
-    e.preventDefault();
-    
-    if (!draggedFolder || draggedFolder === targetFolder) {
-      setDraggedFolder(null);
-      setDragOverFolder(null);
-      return;
-    }
-
-    // Get all tips from both folders
-    const sourceTips = tips.filter(tip => tip.folder === draggedFolder);
-    const targetTips = tips.filter(tip => tip.folder === targetFolder);
-    const combinedTips = [...sourceTips, ...targetTips];
-
-    // Set up combine modal data
-    setCombineData({
-      sourceFolder: draggedFolder,
-      targetFolder: targetFolder,
-      combinedTips: combinedTips
-    });
-    setNewFolderName(targetFolder); // Default to target folder name
-    setShowCombineModal(true);
-
-    setDraggedFolder(null);
-    setDragOverFolder(null);
-  };
-
-  const handleCombineFolders = async () => {
-    if (!combineData || !newFolderName.trim()) return;
-
-    try {
-      // Update all tips to use the new folder name
-      const updatedTips = tips.map(tip => {
-        if (tip.folder === combineData.sourceFolder || tip.folder === combineData.targetFolder) {
-          return { ...tip, folder: newFolderName };
-        }
-        return tip;
-      });
-
-      // Update tips in the API
-      for (const tip of combineData.combinedTips) {
-        const requestOptions = await createAuthenticatedRequest(`/api/tips/${tip.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ folder: newFolderName }),
-        });
-        await fetch(`/api/tips/${tip.id}`, requestOptions);
-      }
-
-      // Update local state
-      setTips(updatedTips);
-      toast.success(`Folders combined into "${newFolderName}"`);
-      setShowCombineModal(false);
-      setCombineData(null);
-      setNewFolderName('');
-    } catch (error) {
-      console.error('Error combining folders:', error);
-      toast.error('Failed to combine folders');
-    }
-  };
-
-  const folderGroups = organizeByFolder(getFilteredTips());
-
-  if (loading) {
+  if (authLoading) {
+    console.log('Showing loading screen - authLoading:', authLoading);
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading tips...</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    console.log('Showing sign in screen - user:', user);
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Please Sign In</h2>
+          <p className="text-gray-600 mb-6">You need to be signed in to view and manage your tips.</p>
+          <Link 
+            href="/"
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Go to Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Show data loading state if user is authenticated but data is still loading
+  if (loading) {
+    console.log('Showing data loading screen - loading:', loading);
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your tips...</p>
         </div>
       </div>
     );
@@ -535,15 +504,6 @@ export default function ReviewPage() {
                   Completed
                 </button>
               </div>
-
-              {/* Folder Management */}
-              <button
-                onClick={() => setShowFolderModal(true)}
-                className="flex items-center space-x-1 sm:space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                <span className="text-xs sm:text-sm hidden sm:inline">Folders</span>
-              </button>
             </div>
           </div>
           
@@ -564,200 +524,226 @@ export default function ReviewPage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        {folderGroups.length === 0 ? (
-          <div className="text-center py-8 sm:py-12">
-            <Clock className="w-12 sm:w-16 h-12 sm:h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No tips to review</h3>
-            <p className="text-gray-600">All tips have been processed or there are no tips matching the current filter.</p>
+      <div className="flex h-[calc(100vh-4rem)]">
+        {/* Sidebar */}
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Folders</h2>
+            
+            {/* All Items Button */}
+            <button
+              onClick={() => setSelectedFolder(null)}
+              className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                selectedFolder === null
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              All Items ({getFilteredTips().length})
+            </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {folderGroups.map((group) => (
-              <div 
-                key={group.name} 
-                className={`bg-white rounded-lg shadow-sm border ${
-                  draggedFolder === group.name ? 'opacity-50' : ''
-                } ${
-                  dragOverFolder === group.name ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                }`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, group.name)}
-                onDragOver={(e) => handleDragOver(e, group.name)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, group.name)}
+          
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="space-y-1">
+              {availableFolders.map((folder) => (
+                <div key={folder} className="flex items-center justify-between group">
+                  <button
+                    onClick={() => setSelectedFolder(folder)}
+                    className={`flex-1 text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      selectedFolder === folder
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
+                  >
+                    {folder}
+                  </button>
+                  <button
+                    onClick={() => deleteFolder(folder)}
+                    className="text-red-600 hover:text-red-700 transition-colors p-1 opacity-0 group-hover:opacity-100"
+                    title="Delete folder"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            {/* New Folder Button */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => setShowNewFolderModal(true)}
+                className="w-full text-left px-3 py-2 rounded-md text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors flex items-center space-x-2"
               >
-                {/* Folder Header */}
-                <div className="p-3 sm:p-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2 min-w-0 flex-1">
-                      <Folder className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
-                      <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">
-                        {searchQuery.trim() ? highlightSearchMatch(group.name, searchQuery) : group.name}
+                <Folder className="w-4 h-4" />
+                <span>New folder</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto bg-gray-50">
+          <div className="p-6">
+            {/* Mobile Folder Selector */}
+            <div className="sm:hidden mb-4">
+              <select
+                value={selectedFolder || ''}
+                onChange={(e) => setSelectedFolder(e.target.value || null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Items</option>
+                {availableFolders.map((folder) => (
+                  <option key={folder} value={folder}>
+                    {folder}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tips Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {getFilteredTips().map((tip) => (
+                <div
+                  key={tip.id}
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                >
+                  {/* Tip Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-gray-900 text-sm truncate">
+                        {tip.title || 'Untitled Tip'}
                       </h3>
-                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full flex-shrink-0">
-                        {group.totalCount}
-                      </span>
+                      {tip.folder && (
+                        <p className="text-xs text-gray-500 mt-1">{tip.folder}</p>
+                      )}
                     </div>
-                    <div className="flex items-center space-x-1 flex-shrink-0">
+                    <div className="flex items-center space-x-1 ml-2">
+                      {!tip.isProcessed && (
+                        <button
+                          onClick={() => markAsProcessed(tip.id)}
+                          className="text-green-600 hover:text-green-700 transition-colors p-1"
+                          title="Mark as processed"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
-                        onClick={() => toggleFolder(group.name)}
-                        className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                        onClick={() => deleteTip(tip.id)}
+                        className="text-red-600 hover:text-red-700 transition-colors p-1"
+                        title="Delete tip"
                       >
-                        {expandedFolders.has(group.name) ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
-                </div>
 
-                {/* Folder Content */}
-                {expandedFolders.has(group.name) && (
-                  <div className="p-3 sm:p-4 space-y-2">
-                    {group.subFolders?.map((subFolder) => (
-                      <div 
-                        key={subFolder.tip.id}
-                        className="border border-gray-200 rounded-md overflow-hidden"
-                      >
-                        {/* Subfolder Header */}
-                        <div className="p-2 sm:p-3 bg-gray-50 border-b border-gray-200">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2 min-w-0 flex-1">
-                              <h4 className="font-medium text-xs sm:text-sm text-gray-900 truncate">
-                                {searchQuery.trim() ? highlightSearchMatch(subFolder.name, searchQuery) : subFolder.name}
-                              </h4>
-                              {subFolder.tip.isProcessed && (
-                                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 flex-shrink-0" />
-                              )}
-                            </div>
-                            <div className="flex items-center space-x-1 flex-shrink-0">
-                              {/* Action Buttons */}
-                              {!subFolder.tip.isProcessed && (
-                                <button
-                                  onClick={() => markAsProcessed(subFolder.tip.id)}
-                                  className="text-green-600 hover:text-green-700 transition-colors p-1"
-                                  title="Mark as processed"
-                                >
-                                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                </button>
-                              )}
-                              <button
-                                onClick={() => deleteTip(subFolder.tip.id)}
-                                className="text-red-600 hover:text-red-700 transition-colors p-1"
-                                title="Delete tip"
-                              >
-                                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                              </button>
-                              <button
-                                onClick={() => toggleSubFolder(subFolder.tip.id)}
-                                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-                              >
-                                {expandedSubFolders.has(subFolder.tip.id) ? (
-                                  <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
-                                ) : (
-                                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Subfolder Content */}
-                        {expandedSubFolders.has(subFolder.tip.id) && (
-                          <div className="p-3 sm:p-4 border-t border-gray-200">
-                            {subFolder.tip.summary && (
-                              <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-blue-50 rounded-md">
-                                <div className="flex items-center space-x-1 mb-1">
-                                  <Brain className="w-3 h-3 text-blue-600" />
-                                  <span className="text-xs sm:text-sm font-medium text-blue-900">AI Summary</span>
-                                </div>
-                                <ul className="text-xs sm:text-sm text-blue-800 space-y-1">
-                                  {String(subFolder.tip.summary).split('•').filter(point => point.trim()).map((point, index) => (
-                                    <li key={index} className="flex items-start">
-                                      <span className="mr-2 text-blue-600">•</span>
-                                      <span>
-                                        {searchQuery.trim() ? highlightSearchMatch(point.trim(), searchQuery) : point.trim()}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {/* URL Preview */}
-                            {subFolder.tip.url && (
-                              <div className="mb-3 sm:mb-4">
-                                <button
-                                  onClick={() => toggleUrlPreview(subFolder.tip.id)}
-                                  className="flex items-center space-x-2 text-xs sm:text-sm text-blue-600 hover:text-blue-700 mb-2"
-                                >
-                                  <span>{expandedUrlPreviews.has(subFolder.tip.id) ? 'Hide' : 'Show'} URL Preview</span>
-                                </button>
-                                {expandedUrlPreviews.has(subFolder.tip.id) && (
-                                  <UrlPreview url={subFolder.tip.url} />
-                                )}
-                              </div>
-                            )}
-
-                            {/* Tip Metadata */}
-                            <div className="space-y-1 sm:space-y-2 text-xs text-gray-500">
-                              {subFolder.tip.relevanceDate && (
-                                <div className="flex items-center space-x-1">
-                                  <Calendar className="w-3 h-3" />
-                                  <span>Relevant: {format(new Date(subFolder.tip.relevanceDate), 'MMM d, yyyy')}</span>
-                                </div>
-                              )}
-                              {subFolder.tip.relevanceEvent && (
-                                <div className="flex items-center space-x-1">
-                                  <Info className="w-3 h-3" />
-                                  <span>Event: {subFolder.tip.relevanceEvent}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center space-x-1">
-                                <Clock className="w-3 h-3" />
-                                <span>Created: {format(new Date(subFolder.tip.createdAt), 'MMM d, yyyy')}</span>
-                              </div>
-                            </div>
-
-                            {/* User Context */}
-                            {subFolder.tip.userContext && (
-                              <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-yellow-50 rounded-md">
-                                <div className="flex items-center space-x-1 mb-1">
-                                  <Info className="w-3 h-3 text-yellow-600" />
-                                  <span className="text-xs sm:text-sm font-medium text-yellow-900">Your Notes</span>
-                                </div>
-                                <p className="text-xs sm:text-sm text-yellow-800">
-                                  {searchQuery.trim() ? highlightSearchMatch(subFolder.tip.userContext, searchQuery) : subFolder.tip.userContext}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Add Context Button */}
-                            {!subFolder.tip.userContext && (
-                              <button
-                                onClick={() => {
-                                  setSelectedTip(subFolder.tip);
-                                  setShowContextModal(true);
-                                }}
-                                className="mt-3 sm:mt-4 w-full text-xs sm:text-sm text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-1"
-                              >
-                                <Edit3 className="w-3 h-3" />
-                                <span>Add notes</span>
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  {/* Tip Content */}
+                  <div className="mb-3">
+                    <p className="text-sm text-gray-700 line-clamp-3">
+                      {searchQuery.trim() ? highlightSearchMatch(tip.content, searchQuery) : tip.content}
+                    </p>
                   </div>
-                )}
+
+                  {/* AI Summary */}
+                  {tip.summary && (
+                    <div className="mb-3 p-2 bg-blue-50 rounded-md">
+                      <div className="flex items-center space-x-1 mb-1">
+                        <Brain className="w-3 h-3 text-blue-600" />
+                        <span className="text-xs font-medium text-blue-900">AI Summary</span>
+                      </div>
+                      <ul className="text-xs text-blue-800 space-y-1">
+                        {String(tip.summary).split('•').filter(point => point.trim()).map((point, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="mr-2 text-blue-600">•</span>
+                            <span>
+                              {searchQuery.trim() ? highlightSearchMatch(point.trim(), searchQuery) : point.trim()}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* URL Preview */}
+                  {tip.url && (
+                    <div className="mb-3">
+                      <button
+                        onClick={() => toggleUrlPreview(tip.id)}
+                        className="flex items-center space-x-2 text-xs text-blue-600 hover:text-blue-700 mb-2"
+                      >
+                        <span>{expandedUrlPreviews.has(tip.id) ? 'Hide' : 'Show'} URL Preview</span>
+                      </button>
+                      {expandedUrlPreviews.has(tip.id) && (
+                        <UrlPreview url={tip.url} />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tip Metadata */}
+                  <div className="space-y-1 text-xs text-gray-500">
+                    {tip.relevanceDate && (
+                      <div className="flex items-center space-x-1">
+                        <Calendar className="w-3 h-3" />
+                        <span>Relevant: {format(new Date(tip.relevanceDate), 'MMM d, yyyy')}</span>
+                      </div>
+                    )}
+                    {tip.relevanceEvent && (
+                      <div className="flex items-center space-x-1">
+                        <Info className="w-3 h-3" />
+                        <span>Event: {tip.relevanceEvent}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Created: {format(new Date(tip.createdAt), 'MMM d, yyyy')}</span>
+                    </div>
+                  </div>
+
+                  {/* User Context */}
+                  {tip.userContext && (
+                    <div className="mt-3 p-2 bg-yellow-50 rounded-md">
+                      <div className="flex items-center space-x-1 mb-1">
+                        <Info className="w-3 h-3 text-yellow-600" />
+                        <span className="text-xs font-medium text-yellow-900">Your Notes</span>
+                      </div>
+                      <p className="text-xs text-yellow-800">
+                        {searchQuery.trim() ? highlightSearchMatch(tip.userContext, searchQuery) : tip.userContext}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Add Context Button */}
+                  {!tip.userContext && (
+                    <button
+                      onClick={() => {
+                        setSelectedTip(tip);
+                        setShowContextModal(true);
+                      }}
+                      className="mt-3 w-full text-xs text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-1"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Add notes</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Empty State */}
+            {getFilteredTips().length === 0 && (
+              <div className="text-center py-12">
+                <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No tips to review</h3>
+                <p className="text-gray-600">
+                  {selectedFolder 
+                    ? `No tips found in "${selectedFolder}" folder.`
+                    : 'All tips have been processed or there are no tips matching the current filter.'
+                  }
+                </p>
               </div>
-            ))}
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Context Modal */}
@@ -809,65 +795,93 @@ export default function ReviewPage() {
         </div>
       )}
 
-      {/* Combine Folders Modal */}
-      {showCombineModal && combineData && (
+      {/* Folder Management Modal */}
+      {showNewFolderModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-xl font-semibold text-gray-900">Combine Folders</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Create New Folder</h2>
               <button
                 onClick={() => {
-                  setShowCombineModal(false);
-                  setCombineData(null);
-                  setNewFolderName('');
+                  setShowNewFolderModal(false);
+                  setNewFolderData({ name: '', description: '', color: '#3B82F6' });
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="p-6">
-              <p className="text-gray-600 mb-4">
-                Combine &quot;{combineData.sourceFolder}&quot; and &quot;{combineData.targetFolder}&quot; into a new folder.
-              </p>
-              <input
-                type="text"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                placeholder="New folder name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <div className="flex space-x-3 mt-4">
+            
+            <form onSubmit={createFolder} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Folder Name *
+                </label>
+                <input
+                  type="text"
+                  value={newFolderData.name}
+                  onChange={(e) => setNewFolderData({ ...newFolderData, name: e.target.value })}
+                  placeholder="e.g., Work Projects, Personal Goals, Reading List"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={newFolderData.description}
+                  onChange={(e) => setNewFolderData({ ...newFolderData, description: e.target.value })}
+                  placeholder="Brief description of what this folder is for..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Color
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {colorOptions.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewFolderData({ ...newFolderData, color })}
+                      className={`w-8 h-8 rounded-full border-2 transition-colors ${
+                        newFolderData.color === color
+                          ? 'border-gray-900'
+                          : 'border-gray-300 hover:border-gray-500'
+                      }`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
                 <button
+                  type="button"
                   onClick={() => {
-                    setShowCombineModal(false);
-                    setCombineData(null);
-                    setNewFolderName('');
+                    setShowNewFolderModal(false);
+                    setNewFolderData({ name: '', description: '', color: '#3B82F6' });
                   }}
                   className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleCombineFolders}
-                  disabled={!newFolderName.trim()}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                 >
-                  Combine
+                  Create Folder
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
-      )}
-
-      {/* Folder Management Modal */}
-      {showFolderModal && (
-        <FolderModal
-          isOpen={showFolderModal}
-          onClose={() => setShowFolderModal(false)}
-          onFoldersChange={handleFoldersChange}
-        />
       )}
     </div>
   );

@@ -42,7 +42,15 @@ export default function NewTipModal({ isOpen, onClose }: NewTipModalProps) {
       const response = await fetch('/api/folders/available', requestOptions);
       if (response.ok) {
         const data = await response.json();
-        setAvailableFolders(data.folders || []);
+        console.log('Available folders API response:', data);
+        // Combine user folders and AI-generated folders
+        const userFolderNames = data.userFolders || [];
+        const aiGeneratedFolderNames = data.aiGeneratedFolders || [];
+        const allFolderNames = [...userFolderNames, ...aiGeneratedFolderNames];
+        console.log('Combined folder names:', allFolderNames);
+        setAvailableFolders(allFolderNames);
+      } else {
+        console.error('Failed to fetch available folders:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error fetching available folders:', error);

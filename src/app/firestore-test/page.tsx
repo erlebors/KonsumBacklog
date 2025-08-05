@@ -88,6 +88,24 @@ export default function FirestoreTestPage() {
     }
   };
 
+  const createTestFolders = async () => {
+    if (!user) {
+      toast.error('Please log in first');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const createdFolders = await firestoreService.createTestFolders(user.uid);
+      toast.success(`Created ${createdFolders.length} test folders`);
+    } catch (error) {
+      console.error('Error creating test folders:', error);
+      toast.error('Failed to create test folders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const clearTestData = async () => {
     if (!user) {
       toast.error('Please log in first');
@@ -264,6 +282,15 @@ export default function FirestoreTestPage() {
               <span>Create Test Data</span>
             </button>
             
+            <button
+              onClick={createTestFolders}
+              disabled={loading}
+              className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+            >
+              <Folder className="w-4 h-4" />
+              <span>Create Test Folders</span>
+            </button>
+
             <button
               onClick={clearTestData}
               disabled={loading}

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { tipsService, Tip } from '@/lib/tipsService';
-import { foldersService } from '@/lib/foldersService';
 import { firestoreService } from '@/lib/firestoreService';
-import { getCurrentUser, isDemoMode } from '@/lib/authUtils';
+import { foldersService } from '@/lib/foldersService';
+import { getCurrentUser } from '@/lib/authUtils';
 import { crawlWebPage } from '@/lib/webCrawler';
 
 const openai = new OpenAI({
@@ -12,22 +11,14 @@ const openai = new OpenAI({
 
 export async function GET(request: NextRequest) {
   try {
-    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
     if (!userId) {
-      // No authenticated user - return empty array
       return NextResponse.json([]);
     }
     
-    // Use Firestore for authenticated users
-    try {
-      const tips = await firestoreService.getAllTips(userId);
-      return NextResponse.json(tips);
-    } catch (error) {
-      console.error('Error fetching from Firestore:', error);
-      return NextResponse.json({ error: 'Failed to fetch tips' }, { status: 500 });
-    }
+    const tips = await firestoreService.getAllTips(userId);
+    return NextResponse.json(tips);
   } catch (error) {
     console.error('Error fetching tips:', error);
     return NextResponse.json({ error: 'Failed to fetch tips' }, { status: 500 });
@@ -36,60 +27,98 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { content, selectedFolder } = await request.json();
-
-    // Parse multiple tips from content
-    const tips = await parseMultipleTips(content, selectedFolder);
-
-    // Try to get authenticated user
     const userId = await getCurrentUser(request);
     
     if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // Save all tips to Firestore
+    
+    const body = await request.json();
+    const { content, selectedFolder } = body;
+    
+    console.log('Full request body:', body);
+    console.log('Extracted selectedFolder:', selectedFolder);
+    console.log('Extracted content:', content);
+    
+    if (!content || !content.trim()) {
+      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
+    }
+    
+    // Check if content contains multiple items
+    const items = content.split(/[,]|(\s+and\s+)|(\s+or\s+)/).filter((item: string) => item.trim());
+    
+    console.log('Content splitting - original:', content, 'items:', items, 'itemCount:', items.length);
+    
+    let processedTips = [];
+    
+    if (items.length > 1) {
+      console.log('Using parseMultipleTips function');
+      // Process multiple tips
+      processedTips = await parseMultipleTips(content, selectedFolder);
+    } else {
+      console.log('Using processSingleTip function');
+      // Process single tip
+      console.log('About to call processSingleTip with content:', content, 'selectedFolder:', selectedFolder);
+      const tip = await processSingleTip(content, undefined, selectedFolder);
+      console.log('processSingleTip returned tip with folder:', tip.folder);
+      processedTips = [tip];
+    }
+    
+    // Save tips to database
     const savedTips = [];
-    try {
-      for (const tip of tips) {
-        const savedTip = await firestoreService.addTip(userId, tip);
-        savedTips.push(savedTip);
-      }
-    } catch (error) {
-      console.error('Error saving to Firestore:', error);
-      return NextResponse.json({ error: 'Failed to save to Firestore' }, { status: 500 });
+    for (const tipData of processedTips) {
+      console.log('Saving tip to database - folder:', tipData.folder, 'content:', tipData.content?.substring(0, 50));
+      const savedTip = await firestoreService.addTip(userId, {
+        content: tipData.content,
+        url: tipData.url || '',
+        title: tipData.title || '',
+        relevanceDate: null,
+        relevanceEvent: null,
+        createdAt: new Date().toISOString(),
+        folder: tipData.folder || 'General Tips',
+        priority: tipData.priority || '5',
+        summary: tipData.summary || '',
+        tags: tipData.tags || [],
+        actionRequired: tipData.actionRequired || false,
+        estimatedTime: tipData.estimatedTime || '',
+        isProcessed: false,
+        aiProcessed: true,
+        urgencyLevel: tipData.urgencyLevel || 'medium'
+      });
+      console.log('Saved tip result - folder:', savedTip.folder);
+      savedTips.push(savedTip);
     }
-
+    
     return NextResponse.json({
       tips: savedTips,
-      count: savedTips.length,
       aiProcessed: true
     });
   } catch (error) {
-    console.error('Error creating tips:', error);
-    return NextResponse.json({ error: 'Failed to create tips' }, { status: 500 });
+    console.error('Error saving tip:', error);
+    return NextResponse.json({ error: 'Failed to save tip' }, { status: 500 });
   }
 }
 
-async function parseMultipleTips(content: string, selectedFolder?: string): Promise<Tip[]> {
+async function parseMultipleTips(content: string, selectedFolder?: string) {
   // If no content, return empty array
   if (!content.trim()) {
     return [];
   }
-
+  
   // If a folder is selected, use it directly without AI categorization
   if (selectedFolder && selectedFolder.trim()) {
-    const tips: Tip[] = [];
-    const items = content.split(/[,\n]+/).map(item => item.trim()).filter(item => item);
+    console.log('parseMultipleTips - using selected folder:', selectedFolder);
+    const items = content.split(/[,\n]+/).map((item: string) => item.trim()).filter((item: string) => item);
+    const tips = [];
     
     for (const item of items) {
-      const tip = await processSingleTip(item, '', selectedFolder);
+      const tip = await processSingleTip(item, undefined, selectedFolder);
       tips.push(tip);
     }
     
     return tips;
   }
-
+  
   // Get custom folder names for AI categorization
   const customFolders = await foldersService.getFolderNames();
   const folderList = customFolders.length > 0 
@@ -162,37 +191,21 @@ Guidelines:
     parsedResponse = JSON.parse(jsonString || '{}');
   } catch (parseError) {
     console.error('Failed to parse AI response:', parseError);
-    // Fallback: treat as single tip
     return [await processSingleTip(content)];
   }
 
-  // Convert parsed tips to Tip objects
-  const tips: Tip[] = [];
-  const tipArray = parsedResponse.tips || [];
-  
-  for (const tipData of tipArray) {
-    // Process each tip to get webpage content if URL is present
-    const processedTip = await processSingleTip(tipData.content, tipData.url);
-    
-    // Override with AI-categorized data
-    const tip: Tip = {
-      ...processedTip,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      content: tipData.content || processedTip.content,
-      url: tipData.url || processedTip.url,
-      title: tipData.title || processedTip.title,
-      folder: tipData.category || processedTip.folder,
-      priority: tipData.priority?.toString() || processedTip.priority,
-      summary: tipData.summary || processedTip.summary,
-      urgencyLevel: tipData.urgency || processedTip.urgencyLevel
-    };
+  // Process each tip
+  const tips = [];
+  for (const tipData of parsedResponse.tips || []) {
+    const tip = await processSingleTip(tipData.content, tipData.url, tipData.category);
     tips.push(tip);
   }
 
   return tips;
 }
 
-async function processSingleTip(content: string, url?: string, folder?: string): Promise<Tip> {
+async function processSingleTip(content: string, url?: string, folder?: string) {
+  
   let pageContent = '';
   let pageTitle = '';
 
@@ -205,6 +218,50 @@ async function processSingleTip(content: string, url?: string, folder?: string):
     }
   }
 
+  // If a folder is selected, use it directly instead of AI categorization
+  if (folder && folder.trim()) {
+    // Determine title for the tip
+    let tipTitle = '';
+    if (pageTitle) {
+      tipTitle = pageTitle;
+    } else if (url) {
+      try {
+        const urlObj = new URL(url);
+        tipTitle = urlObj.hostname.replace('www.', '');
+      } catch {
+        tipTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+      }
+    } else if (content) {
+      tipTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+    }
+
+    // Generate summary using AI but keep the selected folder
+    let summary = '';
+    // Removed AI summary generation - tips will be saved without summaries
+    summary = '';
+
+    const result = {
+      content: content,
+      url: url || '',
+      title: tipTitle,
+      relevanceDate: null,
+      relevanceEvent: null,
+      createdAt: new Date().toISOString(),
+      folder: folder, // Use the selected folder
+      priority: '5',
+      summary: summary,
+      tags: [],
+      actionRequired: false,
+      estimatedTime: '',
+      isProcessed: false,
+      aiProcessed: true,
+      urgencyLevel: 'medium'
+    };
+    
+    return result;
+  }
+
+  // If no folder is selected, use AI categorization as before
   // Get custom folder names for AI categorization
   const customFolders = await foldersService.getFolderNames();
   const folderList = customFolders.length > 0 
@@ -225,11 +282,10 @@ Please provide a JSON response with the following structure:
 {
   "category": "specific folder name based on content. If the content fits well with one of the available custom folders, use that folder name. Otherwise, create a new meaningful folder name (e.g., 'Design Resources', 'Programming Tips', 'Business Strategy')",
   "urgency": "high/medium/low",
-  "priority": 1-10,
-  "pageSummary": "exactly 3 bullet points summarizing the webpage content, each starting with • and being a complete sentence. If no webpage content, provide 3 bullet points about the tip content itself."
+  "priority": 1-10
 }
 
-Focus on using existing custom folders when the content fits well, or creating meaningful, specific folder names that group related content together. For the page summary, provide exactly 3 complete, standalone bullet points that summarize the key information.`;
+Focus on using existing custom folders when the content fits well, or creating meaningful, specific folder names that group related content together.`;
 
   let aiResponse;
   try {
@@ -292,64 +348,47 @@ Focus on using existing custom folders when the content fits well, or creating m
     }
   } else if (content) {
     tipTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
-  } else {
-    tipTitle = 'Untitled';
   }
 
-  // Create the tip with all required fields
-  const tip: Tip = {
-    id: Date.now().toString(),
-    content,
+  return {
+    content: content,
     url: url || '',
     title: tipTitle,
     relevanceDate: null,
     relevanceEvent: null,
     createdAt: new Date().toISOString(),
-    folder: folder || parsedResponse.category || 'General Tips',
+    folder: parsedResponse.category || 'General Tips',
     priority: parsedResponse.priority?.toString() || '5',
-    summary: parsedResponse.pageSummary || '• Tip saved for future reference\n• Content requires manual review\n• Consider organizing into relevant category',
+    summary: '', // Removed AI summary - tips will be saved without summaries
     tags: [],
     actionRequired: false,
-    estimatedTime: undefined,
+    estimatedTime: '',
     isProcessed: false,
     aiProcessed: true,
-    userContext: '',
-    needsMoreInfo: false,
     urgencyLevel: parsedResponse.urgency || 'medium'
   };
-
-  return tip;
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    
-    if (!id) {
-      return NextResponse.json({ error: 'Tip ID is required' }, { status: 400 });
-    }
-
-    // Try to get authenticated user first
     const userId = await getCurrentUser(request);
     
-    if (userId && !isDemoMode()) {
-      // Use Firestore for authenticated users when Firebase Admin is configured
-      try {
-        await firestoreService.deleteTip(userId, id);
-      } catch (error) {
-        console.error('Error deleting from Firestore:', error);
-        // Don't fall back to demo mode for authenticated users - return error instead
-        return NextResponse.json({ error: 'Failed to delete from Firestore' }, { status: 500 });
-      }
-    } else {
-      // Use demo mode for unauthenticated users or when Firebase Admin is not configured
-      await tipsService.deleteTip(id);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
+    
+    const { searchParams } = new URL(request.url);
+    const tipId = searchParams.get('id');
+    
+    if (!tipId) {
+      return NextResponse.json({ error: 'Tip ID is required' }, { status: 400 });
+    }
+    
+    await firestoreService.deleteTip(userId, tipId);
+    
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting tip:', error);
     return NextResponse.json({ error: 'Failed to delete tip' }, { status: 500 });
   }
-} 
+}

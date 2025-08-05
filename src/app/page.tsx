@@ -92,28 +92,26 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="space-y-4">
-            <button
-              onClick={() => setShowNewTip(true)}
-              className="w-full flex items-center justify-center space-x-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
-            >
-              <Plus className="w-6 h-6" />
-              <span>New Tip</span>
-            </button>
+          <button
+            onClick={() => setShowNewTip(true)}
+            className="w-full flex items-center justify-center space-x-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
+          >
+            <Plus className="w-6 h-6" />
+            <span>New Tip</span>
+          </button>
 
-            <Link
-              href="/review"
-              className="w-full flex items-center justify-center space-x-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl relative"
-            >
-              <Clock className="w-6 h-6" />
-              <span>Review Later</span>
-              {urgentCount > 0 && (
-                <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold">
-                  {urgentCount > 9 ? '9+' : urgentCount}
-                </div>
-              )}
-            </Link>
-          </div>
+          <Link
+            href="/review"
+            className="w-full flex items-center justify-center space-x-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl relative"
+          >
+            <Clock className="w-6 h-6" />
+            <span>Review Later</span>
+            {urgentCount > 0 && (
+              <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold">
+                {urgentCount > 9 ? '9+' : urgentCount}
+              </div>
+            )}
+          </Link>
 
           {urgentCount > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
